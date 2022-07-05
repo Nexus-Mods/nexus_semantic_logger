@@ -21,10 +21,10 @@ module NexusSemanticLogger
             span_id: correlation.span_id.to_s,
             env: correlation.env.to_s,
             service: correlation.service.to_s,
-            version: correlation.version.to_s
+            version: correlation.version.to_s,
           }
         },
-        ddsource: ["ruby"]
+        ddsource: ["ruby"],
       }
 
       # Synchronous mode is vital when puma is in single thread mode. Must add appender AFTER setting sync.
