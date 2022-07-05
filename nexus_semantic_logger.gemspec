@@ -1,3 +1,6 @@
+# frozen_string_literal: true
+require_relative 'lib/nexus_semantic_logger/version'
+
 Gem::Specification.new do |spec|
   spec.name = "nexus_semantic_logger"
   spec.version = NexusSemanticLogger::VERSION
