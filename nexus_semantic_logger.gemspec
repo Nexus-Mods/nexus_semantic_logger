@@ -13,7 +13,8 @@ Gem::Specification.new do |spec|
     %x(git ls-files -z).split("\x0").reject { |f| f.match(%r{^(test|spec|features)/}) }
   end
   spec.require_paths = ['lib']
-  spec.add_dependency('amazing_print')
-  spec.add_dependency('rails_semantic_logger')
-  spec.add_dependency('net_tcp_client') # For TCP logging.
+  spec.add_dependency('amazing_print', '~> 1.4.0')
+  spec.add_dependency('rails_semantic_logger', '~> 4.10.0')
+  spec.add_dependency('net_tcp_client', '~> 2.2.0') # For TCP logging.
+  spec.required_ruby_version = Gem::Requirement.new('>= 2.7.0')
 end
