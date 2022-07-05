@@ -2,6 +2,7 @@ image: "ruby:2.7"
 
 stages:
   - release
+  - test
 
 before_script:
   - sudo apt-get update -qq
@@ -9,6 +10,10 @@ before_script:
   - which ruby
   - gem install bundler --no-document
   - bundle install --jobs $(nproc)  "${FLAGS[@]}"
+
+rspec:
+  script:
+    - bundle exec rspec
 
 rubocop:
   script:

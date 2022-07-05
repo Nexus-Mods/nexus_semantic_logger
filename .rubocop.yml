@@ -1,0 +1,7 @@
+inherit_gem:
+  rubocop-shopify: rubocop.yml
+
+Style/GlobalVars:
+  Enabled: false
+Style/FrozenStringLiteralComment:
+  Enabled: false
