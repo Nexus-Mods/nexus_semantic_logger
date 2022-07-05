@@ -1,5 +1,5 @@
 # frozen_string_literal: true
-require 'semantic_logger'
+require 'rails_semantic_logger'
 
 module NexusSemanticLogger
   class Application
