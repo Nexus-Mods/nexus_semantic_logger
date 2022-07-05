@@ -5,7 +5,7 @@ module NexusSemanticLogger
   class Application
     include SemanticLogger::Loggable
 
-    def self.common(config)
+    def self.common(config, service)
       # Set a safe logging level which individual environments can make more verbose if needed.
       config.log_level = ENV.fetch('LOG_LEVEL', 'INFO')
 
@@ -31,7 +31,7 @@ module NexusSemanticLogger
       SemanticLogger.sync!
 
       # Default logging is stdout in datadog compatible JSON.
-      config.rails_semantic_logger.format = NexusSemanticLogger::DatadogFormatter.new('users')
+      config.rails_semantic_logger.format = NexusSemanticLogger::DatadogFormatter.new(service)
       config.rails_semantic_logger.add_file_appender = false
       config.semantic_logger.add_appender(io: $stdout, formatter: config.rails_semantic_logger.format)
 

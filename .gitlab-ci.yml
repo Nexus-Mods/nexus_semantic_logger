@@ -1,0 +1,34 @@
+image: "ruby:2.7"
+
+stages:
+  - release
+
+before_script:
+  - sudo apt-get update -qq
+  - ruby -v
+  - which ruby
+  - gem install bundler --no-document
+  - bundle install --jobs $(nproc)  "${FLAGS[@]}"
+
+rubocop:
+  script:
+    - bundle exec rubocop
+
+release:
+  stage: release
+  rules:
+    - if: '$CI_COMMIT_TAG'
+  script:
+    - mkdir -p ~/.gem
+    - cp $RUBYGEMS_CREDENTIALS ~/.gem/credentials
+    - chmod 0600 ~/.gem/credentials
+    - gem update --system
+    - ruby --version
+    - gem env version
+    - sed -i "s/0.1.0/$CI_COMMIT_TAG/g" lib/nexus_semantic_logger/version.rb
+    - gem build nexus_semantic_logger.gemspec
+    - gem push nexus_semantic_logger*.gem
+  artifacts:
+    paths:
+      - nexus_semantic_logger*.gem
+    expire_in: 30 days

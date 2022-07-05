@@ -1,6 +1,6 @@
 Gem::Specification.new do |spec|
   spec.name = "nexus_semantic_logger"
-  spec.version = "1.0.0"
+  spec.version = NexusSemanticLogger::VERSION
   spec.summary = "semantic_logger usage for nexus"
   spec.authors = ["Johnathon Harris"]
   spec.email = "john.harris@nexusmods.com"
