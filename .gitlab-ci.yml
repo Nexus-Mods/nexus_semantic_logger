@@ -5,9 +5,6 @@ stages:
   - test
 
 before_script:
-  - sudo apt-get update -qq
-  - ruby -v
-  - which ruby
   - gem install bundler --no-document
   - bundle install --jobs $(nproc)  "${FLAGS[@]}"
 
@@ -30,7 +27,7 @@ release:
     - gem update --system
     - ruby --version
     - gem env version
-    - sed -i "s/0.1.0/$CI_COMMIT_TAG/g" lib/nexus_semantic_logger/version.rb
+    - sed -i "s/0.0.0/$CI_COMMIT_TAG/g" lib/nexus_semantic_logger/version.rb
     - gem build nexus_semantic_logger.gemspec
     - gem push nexus_semantic_logger*.gem
   artifacts:
