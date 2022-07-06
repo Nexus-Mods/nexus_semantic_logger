@@ -3,6 +3,8 @@ inherit_gem:
 
 Style/ClassVars:
   Enabled: false
+Style/ConditionalAssignment:
+  Enabled: false
 Style/GlobalVars:
   Enabled: false
 Style/FrozenStringLiteralComment:

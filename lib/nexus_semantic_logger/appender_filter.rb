@@ -70,8 +70,6 @@ module NexusSemanticLogger
       @@names_fatal = nil
     end
 
-    private
-
     def self.fetch_env_names(var)
       ENV.fetch(var, '').split(',').to_set
     end
