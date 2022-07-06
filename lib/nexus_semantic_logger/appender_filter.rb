@@ -15,15 +15,15 @@ module NexusSemanticLogger
         append = false
         if log.name.in?(env_names_trace)
           append = true
-        elsif (log.name.in?(env_names_debug))
+        elsif log.name.in?(env_names_debug)
           append = log.level_index >= 1
-        elsif (log.name.in?(env_names_info))
+        elsif log.name.in?(env_names_info)
           append = log.level_index >= 2
-        elsif (log.name.in?(env_names_warn))
+        elsif log.name.in?(env_names_warn)
           append = log.level_index >= 3
-        elsif (log.name.in?(env_names_error))
+        elsif log.name.in?(env_names_error)
           append = log.level_index >= 4
-        elsif (log.name.in?(env_names_fatal))
+        elsif log.name.in?(env_names_fatal)
           append = log.level_index >= 5
         else
           append = log.level_index >= current_log_level
@@ -58,6 +58,16 @@ module NexusSemanticLogger
 
     def self.env_names_fatal
       @@names_fatal ||= fetch_env_names('LOG_NAMES_FATAL')
+    end
+
+    def self.flush
+      @@names_default_level = nil
+      @@names_trace = nil
+      @@names_debug = nil
+      @@names_info = nil
+      @@names_warn = nil
+      @@names_error = nil
+      @@names_fatal = nil
     end
 
     private
