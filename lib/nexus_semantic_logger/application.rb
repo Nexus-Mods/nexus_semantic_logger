@@ -36,6 +36,8 @@ module NexusSemanticLogger
       dd_appender = config.semantic_logger.add_appender(io: $stdout, formatter: config.rails_semantic_logger.format)
       dd_appender.filter = NexusSemanticLogger::AppenderFilter.filter_lambda
 
+      NexusSemanticLogger::DatadogTracer.new(service)
+
       logger.info('SemanticLogger initialised.', level: config.log_level)
     end
 
@@ -48,13 +50,13 @@ module NexusSemanticLogger
       color_appender = config.semantic_logger.add_appender(io: $stdout, formatter: :color)
       color_appender.filter = NexusSemanticLogger::AppenderFilter.filter_lambda
 
-      if ENV['DD_AGENT_HOST'].present? && ENV['DD_AGENT_PORT'].present?
+      if ENV['DD_AGENT_HOST'].present? && ENV['DD_AGENT_LOGGING_PORT'].present?
         # Development logs can be sent to datadog via a TCP logging endpoint on a local agent.
         # Each port is assigned a particular service.
         # See https://logger.rocketjob.io/appenders.html
         dd_appender = config.semantic_logger.add_appender(
           appender: :tcp,
-          server: "#{ENV['DD_AGENT_HOST']}:#{ENV['DD_AGENT_PORT']}",
+          server: "#{ENV['DD_AGENT_HOST']}:#{ENV['DD_AGENT_LOGGING_PORT']}",
           formatter: config.rails_semantic_logger.format
         )
         dd_appender.filter = NexusSemanticLogger::AppenderFilter.filter_lambda
