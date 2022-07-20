@@ -12,7 +12,7 @@ module NexusSemanticLogger
           c.runtime_metrics.enabled = true
 
           # Configure DogStatsD instance for sending runtime metrics.
-          # By default, runtime metrics from the application are sent to the Datadog Agent with DogStatsD over port 8125.
+          # By default, runtime metrics from the application are sent to the Datadog Agent with DogStatsD on port 8125.
           datadog_singleton = DatadogSingleton.instance
           datadog_singleton.statsd = Datadog::Statsd.new(ENV['DD_AGENT_HOST'], 8125)
           datadog_singleton.tags = ["env:#{Rails.env}", "service:#{service}"]
