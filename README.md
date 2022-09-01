@@ -2,6 +2,15 @@
 
 Configures a [semantic_logger](https://rubygems.org/gems/rails_semantic_logger) as required for NexusMods components.
 
+## Telemetry
+
+As well as providing a semantic logger, this gem handles datadog telemetry associated with the logging approach:
+
+* logs
+* traces
+* metrics
+   * statsd is automatically attached to datadog runtime metrics and may also be used for custom metrics.
+
 # Local gem development
 
 Steps to run this gem from local sources in one the nexus 'staged build' rails components:
