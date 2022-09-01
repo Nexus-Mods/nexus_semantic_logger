@@ -7,7 +7,7 @@ require 'nexus_semantic_logger/datadog_tracer'
 
 module NexusSemanticLogger
   # Get application wide object for sending metrics.
-  def metrics
+  def self.metrics
     DatadogSingleton.instance
   end
 end
