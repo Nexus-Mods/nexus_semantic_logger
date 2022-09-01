@@ -11,6 +11,18 @@ As well as providing a semantic logger, this gem handles datadog telemetry assoc
 * metrics
    * statsd is automatically attached to datadog runtime metrics and may also be used for custom metrics.
 
+### Sending metrics
+
+Ensure the metric name is in the format: `nexus.{component}.{major}.{minor}`
+
+Where _major and minor_ are specific to the component logic e.g. `nexus.uploads.clamscan.pass`
+
+For example, to increment a count:
+
+```
+NexusSemanticLogger.metrics.increment('nexus.users.registration.complete')
+```
+
 # Local gem development
 
 Steps to run this gem from local sources in one the nexus 'staged build' rails components:

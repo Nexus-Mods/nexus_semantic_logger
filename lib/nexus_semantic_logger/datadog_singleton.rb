@@ -3,7 +3,8 @@ require 'singleton'
 
 module NexusSemanticLogger
   # Application wide location to get datadog objects.
-  # Can be moved to its own gem in future, and there is scope to make the usage code even leaner.
+  # dogstatsd-ruby maintains its own queue and thread for flushing, so the client code should never create its
+  # own statsd instance.
   class DatadogSingleton
     include Singleton
     attr_accessor :statsd, :tags
