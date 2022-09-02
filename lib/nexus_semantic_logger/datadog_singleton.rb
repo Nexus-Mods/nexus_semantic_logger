@@ -13,8 +13,18 @@ module NexusSemanticLogger
       statsd&.flush(sync: Rails.env.development?) # Force flush sync in development, speed up checks.
     end
 
-    def increment(metric_name)
-      statsd&.increment(metric_name, tags: tags)
+    # Delegate to statsd (if available).
+    # @param [String] metric Metric name.
+    def increment(metric)
+      statsd&.increment(metric, tags: tags)
+      flush
+    end
+
+    # Delegate to statsd (if available).
+    # @param [String] metric Metric name.
+    # @param [Integer] ms Timing in milliseconds.
+    def timing(metric, ms)
+      statsd&.timing(metric, ms, tags: tags)
       flush
     end
   end
