@@ -22,7 +22,7 @@ module NexusSemanticLogger
       hash[:source] = :rails
       level = hash.delete(:level)
       hash[:status] = level
-      hash[:env] = Rails.env
+      hash[:railsenv] = Rails.env
       hash[:service] = @service
       hash.delete(:application)
       hash.delete(:environment)
