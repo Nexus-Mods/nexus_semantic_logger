@@ -26,7 +26,6 @@ module NexusSemanticLogger
           # Tracer requires configuration to a datadog agent via DD_AGENT_HOST.
           dd_force_tracer_val = ENV.fetch('DD_FORCE_TRACER', false)
           dd_force_tracer = dd_force_tracer_val.present? && dd_force_tracer_val.to_s == 'true'
-          puts "** dd_force_tracer: #{dd_force_tracer}"
           c.tracer(enabled: Rails.env.production? || dd_force_tracer)
         end
 
