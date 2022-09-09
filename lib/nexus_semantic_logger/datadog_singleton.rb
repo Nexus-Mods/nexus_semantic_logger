@@ -7,7 +7,7 @@ module NexusSemanticLogger
   # own statsd instance.
   class DatadogSingleton
     include Singleton
-    attr_accessor :statsd, :tags
+    attr_accessor :statsd, :global_tags
 
     def flush
       statsd&.flush(sync: Rails.env.development?) # Force flush sync in development, speed up checks.
@@ -15,16 +15,18 @@ module NexusSemanticLogger
 
     # Delegate to statsd (if available).
     # @param [String] metric Metric name.
-    def increment(metric)
-      statsd&.increment(metric, tags: tags)
+    # @param [Array<String>] tags Additional tags.
+    def increment(metric, tags: [])
+      statsd&.increment(metric, tags: global_tags + tags)
       flush
     end
 
     # Delegate to statsd (if available).
     # @param [String] metric Metric name.
     # @param [Integer] ms Timing in milliseconds.
-    def timing(metric, ms)
-      statsd&.timing(metric, ms, tags: tags)
+    # @param [Array<String>] tags Additional tags.
+    def timing(metric, ms, tags: [])
+      statsd&.timing(metric, ms, tags: global_tags + tags)
       flush
     end
   end
