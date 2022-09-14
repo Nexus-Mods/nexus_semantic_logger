@@ -26,7 +26,17 @@ module NexusSemanticLogger
           # Tracer requires configuration to a datadog agent via DD_AGENT_HOST.
           dd_force_tracer_val = ENV.fetch('DD_FORCE_TRACER', false)
           dd_force_tracer = dd_force_tracer_val.present? && dd_force_tracer_val.to_s == 'true'
-          c.tracer(enabled: Rails.env.production? || dd_force_tracer)
+          dd_tracer_enabled = Rails.env.production? || dd_force_tracer
+          c.tracer(enabled: dd_tracer_enabled)
+
+          # Profiling is also provided by ddtrace, we synchronise their feature toggles.
+          c.profiling.enabled = dd_tracer_enabled
+
+        else
+          # If there is no DD_AGENT_HOST then ensure features are disabled.
+          c.runtime_metrics.enabled = false
+          c.tracer(enabled: false)
+          c.profiling.enabled = false
         end
 
         c.use(:rails, service_name: service)
