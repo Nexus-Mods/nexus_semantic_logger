@@ -7,7 +7,7 @@ module NexusSemanticLogger
 
     def self.common(config, service)
       # Set a safe logging level which individual environments can make more verbose if needed.
-      config.log_level = ENV.fetch('LOG_LEVEL', 'INFO')
+      config.log_level = ENV.fetch('LOG_LEVEL', 'WARN')
 
       # semanticlogger ddtrace correlation.
       # From https://github.com/DataDog/dd-trace-rb/issues/1450
