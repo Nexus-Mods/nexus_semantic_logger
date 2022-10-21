@@ -23,6 +23,14 @@ module NexusSemanticLogger
 
     # Delegate to statsd (if available).
     # @param [String] metric Metric name.
+    # @param [Array<String>] tags Additional tags.
+    def decrement(metric, tags: [])
+      statsd&.decrement(metric, tags: global_tags + tags)
+      flush
+    end
+
+    # Delegate to statsd (if available).
+    # @param [String] metric Metric name.
     # @param [Integer] ms Timing in milliseconds.
     # @param [Array<String>] tags Additional tags.
     def timing(metric, ms, tags: [])
