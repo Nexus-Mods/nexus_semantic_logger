@@ -14,7 +14,7 @@ module NexusSemanticLogger
     end
 
     def timing(metric, &block)
-      super("#{@prefix}#{metric}", block)
+      super("#{@prefix}#{metric}", &block)
     end
   end
 end
