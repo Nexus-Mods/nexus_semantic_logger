@@ -63,6 +63,9 @@ module NexusSemanticLogger
       end
 
       logger.info('SemanticLogger initialised in development.', level: config.log_level)
+
+      # Ensure logging is immediately flushed.
+      $stdout.sync = true
     end
 
     def self.test(config)
@@ -70,6 +73,9 @@ module NexusSemanticLogger
       config.semantic_logger.clear_appenders!
       color_appender = config.semantic_logger.add_appender(io: $stdout, formatter: :color)
       color_appender.filter = NexusSemanticLogger::AppenderFilter.filter_lambda
+
+      # Ensure logging is immediately flushed.
+      $stdout.sync = true
     end
   end
 end
