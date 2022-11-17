@@ -37,5 +37,23 @@ module NexusSemanticLogger
       statsd&.timing(metric, ms, tags: global_tags + tags)
       flush
     end
+
+    # Delegate to statsd (if available).
+    # @param [String] metric Metric name.
+    # @param [Numeric] value Distribution value.
+    # @param [Array<String>] tags Additional tags.
+    def distribution(metric, value, tags: [])
+      statsd&.distribution(metric, value, tags: global_tags + tags)
+      flush
+    end
+
+    # Delegate to statsd (if available).
+    # @param [String] metric Metric name.
+    # @param [Numeric] value Gauge value.
+    # @param [Array<String>] tags Additional tags.
+    def gauge(metric, value, tags: [])
+      statsd&.gauge(metric, value, tags: global_tags + tags)
+      flush
+    end
   end
 end
