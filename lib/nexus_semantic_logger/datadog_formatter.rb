@@ -32,6 +32,24 @@ module NexusSemanticLogger
       if named_tags.is_a?(Hash)
         hash.deep_merge!(named_tags)
       end
+      hash_to_json(hash)
+    end
+
+    # Serialise hash to json while ensuring we don't abort due to an infinite loop.
+    # SystemStackError while serialising indicates an infinite loop- determine which key is affected.
+    def hash_to_json(hash)
+      hash.to_json
+    rescue SystemStackError
+      as_json_serialise_errors = []
+      hash.keys.each do |key|
+        begin
+          hash[key].as_json
+        rescue SystemStackError
+          hash.delete(key)
+          as_json_serialise_errors << key
+        end
+      end
+      hash[:as_json_serialise_errors] = as_json_serialise_errors
       hash.to_json
     end
   end
