@@ -42,12 +42,10 @@ module NexusSemanticLogger
     rescue SystemStackError
       as_json_serialise_errors = []
       hash.keys.each do |key|
-        begin
-          hash[key].as_json
-        rescue SystemStackError
-          hash.delete(key)
-          as_json_serialise_errors << key
-        end
+        hash[key].as_json
+      rescue SystemStackError
+        hash.delete(key)
+        as_json_serialise_errors << key
       end
       hash[:as_json_serialise_errors] = as_json_serialise_errors
       hash.to_json
