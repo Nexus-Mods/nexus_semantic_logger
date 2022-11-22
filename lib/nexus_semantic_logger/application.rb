@@ -41,7 +41,8 @@ module NexusSemanticLogger
       logger.info('SemanticLogger initialised.', level: config.log_level)
 
       config.after_initialize do
-        require("nexus_semantic_logger/extensions/action_dispatch/debug_exceptions") if defined?(::ActionDispatch::DebugExceptions)
+        require("nexus_semantic_logger/extensions/action_dispatch/debug_exceptions") if defined?(
+          ::ActionDispatch::DebugExceptions)
       end
     end
 
