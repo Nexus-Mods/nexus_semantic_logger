@@ -83,20 +83,7 @@ module NexusSemanticLogger
     # Each signal rotates through the levels, wrapping around.
     # Based on SemanticLogger.add_signal_handler.
     # Note that USR1/USR2 are already used by puma. WINCH/SYS should be unused these days.
-    def self.add_signal_handler(log_level_signal = "WINCH", log_names_level_signal = "SYS")
-      if log_level_signal
-        Signal.trap(log_level_signal) do
-          current_level = env_level
-          next_level = get_next_log_level(current_level)
-          @@level = next_level
-          Rails.application.config.log_level = next_level
-          puts "#{log_level_signal} signal changed LOG_LEVEL from #{current_level} to #{next_level}"
-        rescue => err
-          puts "Error handling signal #{log_level_signal}: #{err}"
-          puts err.backtrace
-        end
-      end
-
+    def self.add_signal_handler(log_names_level_signal = "WINCH", info_signal = "SYS")
       if log_names_level_signal
         Signal.trap(log_names_level_signal) do
           current_level = env_names_default_level
@@ -105,6 +92,16 @@ module NexusSemanticLogger
           puts "#{log_names_level_signal} signal changed LOG_NAMES_DEFAULT_LEVEL from #{current_level} to #{next_level}"
         rescue => err
           puts "Error handling signal #{log_names_level_signal}: #{err}"
+          puts err.backtrace
+        end
+      end
+
+      if info_signal
+        Signal.trap(info_signal) do
+          current_level = env_names_default_level
+          puts "#{info_signal} signal reports LOG_LEVEL=#{env_level} LOG_NAMES_DEFAULT_LEVEL=#{current_level}"
+        rescue => err
+          puts "Error handling signal #{info_signal}: #{err}"
           puts err.backtrace
         end
       end
