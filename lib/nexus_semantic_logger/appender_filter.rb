@@ -107,8 +107,6 @@ module NexusSemanticLogger
       end
     end
 
-    private
-
     def self.get_next_log_level(current_log_level)
       current_log_level_index = SemanticLogger::Levels.index(current_log_level)
       next_log_level_index = current_log_level_index + 1
