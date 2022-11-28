@@ -35,6 +35,7 @@ module NexusSemanticLogger
       config.rails_semantic_logger.add_file_appender = false
       dd_appender = config.semantic_logger.add_appender(io: $stdout, formatter: config.rails_semantic_logger.format)
       dd_appender.filter = NexusSemanticLogger::AppenderFilter.filter_lambda
+      NexusSemanticLogger::AppenderFilter.add_signal_handler
 
       NexusSemanticLogger::DatadogTracer.new(service)
 

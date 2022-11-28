@@ -11,3 +11,12 @@ module NexusSemanticLogger
     DatadogSingleton.instance
   end
 end
+
+# Patch access to LEVELS array.
+module SemanticLogger
+  module Levels
+    def self.all_levels
+      LEVELS
+    end
+  end
+end

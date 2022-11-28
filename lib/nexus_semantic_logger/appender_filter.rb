@@ -32,8 +32,12 @@ module NexusSemanticLogger
       }
     end
 
+    def self.env_level
+      @@level ||= ENV.fetch('LOG_LEVEL', Rails.application.config.log_level).downcase
+    end
+
     def self.env_names_default_level
-      @@names_default_level ||= ENV.fetch('LOG_NAMES_DEFAULT_LEVEL', Rails.application.config.log_level)
+      @@names_default_level ||= ENV.fetch('LOG_NAMES_DEFAULT_LEVEL', Rails.application.config.log_level).downcase
     end
 
     def self.env_names_trace
@@ -61,6 +65,7 @@ module NexusSemanticLogger
     end
 
     def self.flush
+      @@level = nil
       @@names_default_level = nil
       @@names_trace = nil
       @@names_debug = nil
@@ -72,6 +77,46 @@ module NexusSemanticLogger
 
     def self.fetch_env_names(var)
       ENV.fetch(var, '').split(',').to_set
+    end
+
+    # Change LOG_LEVEL and LOG_NAMES_DEFAULT_LEVEL on a running process by sending signals.
+    # Each signal rotates through the levels, wrapping around.
+    # Based on SemanticLogger.add_signal_handler.
+    # Note that USR1/USR2 are already used by puma. WINCH/SYS should be unused these days.
+    def self.add_signal_handler(log_level_signal = "WINCH", log_names_level_signal = "SYS")
+      if log_level_signal
+        Signal.trap(log_level_signal) do
+          current_level = env_level
+          next_level = get_next_log_level(current_level)
+          @@level = next_level
+          Rails.application.config.log_level = next_level
+          puts "#{log_level_signal} signal changed LOG_LEVEL from #{current_level} to #{next_level}"
+        rescue => err
+          puts "Error handling signal #{log_level_signal}: #{err}"
+          puts err.backtrace
+        end
+      end
+
+      if log_names_level_signal
+        Signal.trap(log_names_level_signal) do
+          current_level = env_names_default_level
+          next_level = get_next_log_level(current_level)
+          @@names_default_level = next_level
+          puts "#{log_names_level_signal} signal changed LOG_NAMES_DEFAULT_LEVEL from #{current_level} to #{next_level}"
+        rescue => err
+          puts "Error handling signal #{log_names_level_signal}: #{err}"
+          puts err.backtrace
+        end
+      end
+    end
+
+    private
+
+    def self.get_next_log_level(current_log_level)
+      current_log_level_index = SemanticLogger::Levels.index(current_log_level)
+      next_log_level_index = current_log_level_index + 1
+      next_log_level_index = 0 if next_log_level_index >= SemanticLogger::Levels.all_levels.size
+      SemanticLogger::Levels.level(next_log_level_index)
     end
   end
 end
