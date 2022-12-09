@@ -3,7 +3,6 @@ require 'semantic_logger'
 
 module NexusSemanticLogger
   # Sends SemanticLogger metrics to statsd.
-  # This is a candidate to move into the nexus_semantic_logger gem if it becomes widely useful.
   # See https://logger.rocketjob.io/metrics.html
   # Based on https://github.com/reidmorrison/semantic_logger/blob/master/lib/semantic_logger/metric/statsd.rb
   class LoggerMetricsSubscriber < SemanticLogger::Subscriber
