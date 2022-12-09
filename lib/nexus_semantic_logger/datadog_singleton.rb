@@ -17,7 +17,7 @@ module NexusSemanticLogger
     # @param [String] metric Metric name.
     # @param [Array<String>] tags Additional tags.
     def increment(metric, tags: [])
-      statsd&.increment(metric, tags: global_tags + tags)
+      statsd&.increment(metric, tags: combine_tags(tags))
       flush
     end
 
@@ -25,7 +25,7 @@ module NexusSemanticLogger
     # @param [String] metric Metric name.
     # @param [Array<String>] tags Additional tags.
     def decrement(metric, tags: [])
-      statsd&.decrement(metric, tags: global_tags + tags)
+      statsd&.decrement(metric, tags: combine_tags(tags))
       flush
     end
 
@@ -34,7 +34,7 @@ module NexusSemanticLogger
     # @param [Integer] ms Timing in milliseconds.
     # @param [Array<String>] tags Additional tags.
     def timing(metric, ms, tags: [])
-      statsd&.timing(metric, ms, tags: global_tags + tags)
+      statsd&.timing(metric, ms, tags: combine_tags(tags))
       flush
     end
 
@@ -43,7 +43,7 @@ module NexusSemanticLogger
     # @param [Numeric] value Distribution value.
     # @param [Array<String>] tags Additional tags.
     def distribution(metric, value, tags: [])
-      statsd&.distribution(metric, value, tags: global_tags + tags)
+      statsd&.distribution(metric, value, tags: combine_tags(tags))
       flush
     end
 
@@ -52,8 +52,18 @@ module NexusSemanticLogger
     # @param [Numeric] value Gauge value.
     # @param [Array<String>] tags Additional tags.
     def gauge(metric, value, tags: [])
-      statsd&.gauge(metric, value, tags: global_tags + tags)
+      statsd&.gauge(metric, value, tags: combine_tags(tags))
       flush
+    end
+
+    private
+
+    # Safely combine the global tags with the supplied tags.
+    def combine_tags(tags)
+      final_tags = []
+      final_tags += global_tags unless global_tags.nil?
+      final_tags += tags unless tags.nil?
+      final_tags
     end
   end
 end
