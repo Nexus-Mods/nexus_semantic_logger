@@ -7,7 +7,6 @@ module NexusSemanticLogger
   # See https://logger.rocketjob.io/metrics.html
   # Based on https://github.com/reidmorrison/semantic_logger/blob/master/lib/semantic_logger/metric/statsd.rb
   class LoggerMetricsSubscriber < SemanticLogger::Subscriber
-
     def call(log)
       log(log) if should_log?(log)
     end
