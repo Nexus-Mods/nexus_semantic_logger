@@ -39,6 +39,8 @@ module NexusSemanticLogger
 
       NexusSemanticLogger::DatadogTracer.new(service)
 
+      SemanticLogger.on_log(NexusSemanticLogger::LoggerMetricsSubscriber.new)
+
       logger.info('SemanticLogger initialised.', level: config.log_level)
 
       config.after_initialize do
