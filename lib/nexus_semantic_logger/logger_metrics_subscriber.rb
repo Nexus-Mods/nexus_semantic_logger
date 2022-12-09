@@ -15,7 +15,7 @@ module NexusSemanticLogger
     def log(log)
       metric = log.metric
       tags = log.payload.nil? ? nil : []
-      log.payload.each_pair { |key, value| tags << "#{key}:#{value}" } unless log.payload.nil?
+      log.payload&.each_pair { |key, value| tags << "#{key}:#{value}" }
       if (duration = log.duration)
         NexusSemanticLogger.metrics.timing(metric, duration, tags: tags)
       else
