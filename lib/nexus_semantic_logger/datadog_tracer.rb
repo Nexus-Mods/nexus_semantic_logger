@@ -15,10 +15,10 @@ module NexusSemanticLogger
           # By default, runtime metrics from the application are sent to the Datadog Agent with DogStatsD on port 8125.
           datadog_singleton = DatadogSingleton.instance
           datadog_statsd_socket_path = ENV.fetch('DD_STATSD_SOCKET_PATH') { '' }
-          if datadog_statsd_socket_path.to_s.strip.empty?
-            datadog_singleton.statsd = Datadog::Statsd.new(ENV['DD_AGENT_HOST'], 8125)
+          datadog_singleton.statsd = if datadog_statsd_socket_path.to_s.strip.empty?
+            Datadog::Statsd.new(ENV['DD_AGENT_HOST'], 8125)
           else
-            datadog_singleton.statsd = Datadog::Statsd.new(socket_path: datadog_statsd_socket_path)
+            Datadog::Statsd.new(socket_path: datadog_statsd_socket_path)
           end
           c.runtime_metrics.statsd = datadog_singleton.statsd
 
@@ -44,7 +44,7 @@ module NexusSemanticLogger
           c.profiling.enabled = false
         end
 
-        c.tracing.instrument :rails, service_name: service
+        c.tracing.instrument(:rails, service_name: service)
 
         c.logger.level = Logger::WARN # ddtrace info logging is too verbose.
       end
