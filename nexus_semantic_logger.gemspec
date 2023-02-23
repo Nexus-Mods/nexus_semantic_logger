@@ -14,9 +14,9 @@ Gem::Specification.new do |spec|
   end
   spec.require_paths = ['lib']
   spec.add_dependency('amazing_print', '~> 1.4.0')
-  spec.add_dependency('ddtrace', '~> 0.54.2') # For datadog tracing/profiling.
+  spec.add_dependency('ddtrace', '~> 1.9.0') # For datadog tracing/profiling.
   spec.add_dependency('dogstatsd-ruby', '~> 5.4.0') # For custom application metrics.
-  spec.add_dependency('google-protobuf', '~> 3.21.7')
+  spec.add_dependency('google-protobuf', '~> 3.21.12')
   spec.add_dependency('net_tcp_client', '~> 2.2.0') # For TCP logging.
   spec.add_dependency('rails_semantic_logger', '~> 4.10.0')
   spec.required_ruby_version = Gem::Requirement.new('>= 2.7.0')
