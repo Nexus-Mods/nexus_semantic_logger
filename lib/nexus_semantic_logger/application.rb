@@ -15,7 +15,7 @@ module NexusSemanticLogger
       config.log_tags = {
         request_id: :request_id,
         dd: -> (_) {
-          correlation = Datadog.tracer.active_correlation
+          correlation = Datadog::Tracing.correlation
           {
             trace_id: correlation.trace_id.to_s,
             span_id: correlation.span_id.to_s,
