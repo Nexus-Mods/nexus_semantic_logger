@@ -29,7 +29,7 @@ module NexusSemanticLogger
           # Trace tags API is Hash<String,String>, see https://www.rubydoc.info/gems/ddtrace/Datadog/Tracing
           c.tags = {
             railsenv: Rails.env,
-            service: service
+            service: service,
           }
 
           # Tracer requires configuration to a datadog agent via DD_AGENT_HOST.

@@ -7,6 +7,7 @@ require 'ddtrace'
 puts "hello world"
 Datadog::Core::Environment::VMCache.class_eval do
   module_function
+
   # Ruby >= 3.2 uses :constant_cache_invalidations instead of :global_constant_state
   # This is a temporary workaround, the correct solution is to report both :constant_cache_invalidations and :constant_cache_misses in DD
   # See https://github.com/ruby/ruby/pull/5433,
