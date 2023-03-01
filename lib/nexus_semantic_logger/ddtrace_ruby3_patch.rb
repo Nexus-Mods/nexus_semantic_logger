@@ -4,7 +4,6 @@ require 'ddtrace'
 # Temporary monkey patch for ddtrace 1.9 in ruby 3.2.
 # Supposedly fixed in upstream 1.10, once that is released.
 # See https://github.com/DataDog/dd-trace-rb/issues/2534
-puts "hello world"
 Datadog::Core::Environment::VMCache.class_eval do
   module_function
 
