@@ -22,11 +22,15 @@ module NexusSemanticLogger
           end
           c.runtime_metrics.statsd = datadog_singleton.statsd
 
-          # Configure tags to be sent on all traces and metrics.
+          # Configure tags to be sent on all metrics.
           # Note that 'env' is NOT sent- that is set as the default on the agent e.g. staging, canary, production.
           # It does not necessarily align with the Rails env, and we do not want to double tag the env.
           datadog_singleton.global_tags = ["railsenv:#{Rails.env}", "service:#{service}"]
-          c.tags = datadog_singleton.global_tags
+          # Trace tags API is Hash<String,String>, see https://www.rubydoc.info/gems/ddtrace/Datadog/Tracing
+          c.tags = {
+            railsenv: Rails.env,
+            service: service
+          }
 
           # Tracer requires configuration to a datadog agent via DD_AGENT_HOST.
           dd_force_tracer_val = ENV.fetch('DD_FORCE_TRACER', false)
