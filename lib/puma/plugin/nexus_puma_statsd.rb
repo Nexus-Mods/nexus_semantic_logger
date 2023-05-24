@@ -44,7 +44,7 @@ class PumaStats
   end
 
   def clustered?
-    @stats.has_key?(:workers)
+    @stats.key?(:workers)
   end
 
   def workers
@@ -140,7 +140,7 @@ Puma::Plugin.create do
     global_tags = NexusSemanticLogger::DatadogSingleton.instance.global_tags
     tags += global_tags unless global_tags.nil?
 
-    if ENV.has_key?("HOSTNAME")
+    if ENV.key?('HOSTNAME')
       tags << "pod_name:#{ENV['HOSTNAME']}"
     end
 
@@ -149,7 +149,7 @@ Puma::Plugin.create do
     #
     # https://docs.datadoghq.com/agent/docker/?tab=standard#global-options
     #
-    if ENV.has_key?("DD_TAGS")
+    if ENV.key?("DD_TAGS")
       ENV["DD_TAGS"].split(/\s+|,/).each do |t|
         tags << t
       end
@@ -159,24 +159,24 @@ Puma::Plugin.create do
     # the metric tags with the application running
     #
     # https://docs.datadoghq.com/getting_started/tagging/unified_service_tagging
-    if ENV.has_key?("DD_ENV")
-      tags << "env:#{ENV["DD_ENV"]}"
+    if ENV.key?('DD_ENV')
+      tags << "env:#{ENV['DD_ENV']}"
     end
 
-    if ENV.has_key?("DD_SERVICE")
-      tags << "service:#{ENV["DD_SERVICE"]}"
+    if ENV.key?('DD_SERVICE')
+      tags << "service:#{ENV['DD_SERVICE']}"
     end
 
-    if ENV.has_key?("DD_VERSION")
-      tags << "version:#{ENV["DD_VERSION"]}"
+    if ENV.key?('DD_VERSION')
+      tags << "version:#{ENV['DD_VERSION']}"
     end
 
     # Support the origin detection over UDP from Datadog, it allows DogStatsD
     # to detect where the container metrics come from, and tag metrics automatically.
     #
     # https://docs.datadoghq.com/developers/dogstatsd/?tab=kubernetes#origin-detection-over-udp
-    if ENV.has_key?("DD_ENTITY_ID")
-      tags << "dd.internal.entity_id:#{ENV["DD_ENTITY_ID"]}"
+    if ENV.key?('DD_ENTITY_ID')
+      tags << "dd.internal.entity_id:#{ENV['DD_ENTITY_ID']}"
     end
 
     # Return nil if we have no environment variable tags. This way we don't
