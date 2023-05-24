@@ -112,7 +112,7 @@ Puma::Plugin.create do
       end
 
     @statsd = ::StatsdConnector.new
-    @log_writer.debug "statsd: enabled (host: #{@statsd.host})"
+    @log_writer.debug("statsd: enabled (host: #{@statsd.host})")
 
     # Fetch global metric prefix from env variable
     @metric_prefix = ENV.fetch('DD_STATSD_METRIC_PREFIX', nil)
@@ -194,23 +194,28 @@ Puma::Plugin.create do
   def stats_loop
     tags = environment_variable_tags
 
-    sleep 5
+    sleep(5)
     loop do
-      @log_writer.debug "statsd: notify statsd"
+      @log_writer.debug("statsd: notify statsd")
       begin
         stats = ::PumaStats.new(Puma.stats_hash)
         @statsd.send(metric_name: prefixed_metric_name("puma.workers"), value: stats.workers, type: :gauge, tags: tags)
-        @statsd.send(metric_name: prefixed_metric_name("puma.booted_workers"), value: stats.booted_workers, type: :gauge, tags: tags)
-        @statsd.send(metric_name: prefixed_metric_name("puma.old_workers"), value: stats.old_workers, type: :gauge, tags: tags)
+        @statsd.send(metric_name: prefixed_metric_name("puma.booted_workers"), value: stats.booted_workers,
+type: :gauge, tags: tags)
+        @statsd.send(metric_name: prefixed_metric_name("puma.old_workers"), value: stats.old_workers, type: :gauge,
+tags: tags)
         @statsd.send(metric_name: prefixed_metric_name("puma.running"), value: stats.running, type: :gauge, tags: tags)
         @statsd.send(metric_name: prefixed_metric_name("puma.backlog"), value: stats.backlog, type: :gauge, tags: tags)
-        @statsd.send(metric_name: prefixed_metric_name("puma.pool_capacity"), value: stats.pool_capacity, type: :gauge, tags: tags)
-        @statsd.send(metric_name: prefixed_metric_name("puma.max_threads"), value: stats.max_threads, type: :gauge, tags: tags)
-        @statsd.send(metric_name: prefixed_metric_name("puma.requests_count"), value: stats.requests_count, type: :gauge, tags: tags)
+        @statsd.send(metric_name: prefixed_metric_name("puma.pool_capacity"), value: stats.pool_capacity, type: :gauge,
+tags: tags)
+        @statsd.send(metric_name: prefixed_metric_name("puma.max_threads"), value: stats.max_threads, type: :gauge,
+tags: tags)
+        @statsd.send(metric_name: prefixed_metric_name("puma.requests_count"), value: stats.requests_count,
+type: :gauge, tags: tags)
       rescue StandardError => e
-        @log_writer.unknown_error e, nil, "! statsd: notify stats failed"
+        @log_writer.unknown_error(e, nil, "! statsd: notify stats failed")
       ensure
-        sleep 2
+        sleep(2)
       end
     end
   end
