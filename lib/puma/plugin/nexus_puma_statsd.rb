@@ -2,40 +2,12 @@
 require 'puma'
 require 'puma/plugin'
 require 'socket'
-require 'nexus_semantic_logger/datadog_singleton'
+require 'nexus_semantic_logger'
 
 # Forked from puma-plugin-statsd.
 # Uses the same datadog settings as nexus_semantic_logger.
 # To use, add to puma.rb:
 #   plugin :nexus_puma_statsd
-class StatsdConnector
-  STATSD_TYPES = { count: 'c', gauge: 'g' }
-  METRIC_DELIMETER = "."
-
-  attr_reader :host, :port
-
-  def initialize
-    @host = ENV.fetch('DD_AGENT_HOST', '127.0.0.1')
-    @port = ENV.fetch('DD_STATSD_PORT', 8125)
-    @socket_path = ENV.fetch('DD_STATSD_SOCKET_PATH', '')
-  end
-
-  def send(metric_name:, value:, type:, tags: nil)
-    data = "#{metric_name}:#{value}|#{STATSD_TYPES.fetch(type)}"
-    data = "#{data}|##{tags}" unless tags.nil?
-
-    if @socket_path.to_s.strip.empty?
-      socket = UDPSocket.new
-      socket.send(data, 0, host, port)
-    else
-      socket = Socket.new(Socket::AF_UNIX, Socket::SOCK_DGRAM)
-      socket.connect(Socket.pack_sockaddr_un(@socket_path))
-      socket.sendmsg_nonblock(data)
-    end
-  ensure
-    socket.close
-  end
-end
 
 # Wrap puma's stats in a safe API
 class PumaStats
@@ -111,14 +83,7 @@ Puma::Plugin.create do
         @launcher.events
       end
 
-    @statsd = ::StatsdConnector.new
-    @log_writer.debug("statsd: enabled (host: #{@statsd.host})")
-
-    # Fetch global metric prefix from env variable
-    @metric_prefix = ENV.fetch('DD_STATSD_METRIC_PREFIX', nil)
-    if @metric_prefix && !@metric_prefix.end_with?(::StatsdConnector::METRIC_DELIMETER)
-      @metric_prefix += ::StatsdConnector::METRIC_DELIMETER
-    end
+    @log_writer.debug('statsd: enabled')
 
     register_hooks
   end
@@ -137,8 +102,6 @@ Puma::Plugin.create do
     # Examples: simple-tag-0 tag-key-1:tag-value-1
     #
     tags = []
-    global_tags = NexusSemanticLogger::DatadogSingleton.instance.global_tags
-    tags += global_tags unless global_tags.nil?
 
     if ENV.key?('HOSTNAME')
       tags << "pod_name:#{ENV['HOSTNAME']}"
@@ -179,15 +142,9 @@ Puma::Plugin.create do
       tags << "dd.internal.entity_id:#{ENV['DD_ENTITY_ID']}"
     end
 
-    # Return nil if we have no environment variable tags. This way we don't
-    # send an unnecessary '|' on the end of each stat
     return nil if tags.empty?
 
-    tags.join(",")
-  end
-
-  def prefixed_metric_name(puma_metric)
-    "#{@metric_prefix}#{puma_metric}"
+    tags
   end
 
   # Send data to statsd every few seconds
@@ -196,24 +153,19 @@ Puma::Plugin.create do
 
     sleep(5)
     loop do
-      @log_writer.debug("statsd: notify statsd")
+      @log_writer.debug('statsd: notify statsd')
       begin
         stats = ::PumaStats.new(Puma.stats_hash)
-        @statsd.send(metric_name: prefixed_metric_name("puma.workers"), value: stats.workers, type: :gauge, tags: tags)
-        @statsd.send(metric_name: prefixed_metric_name("puma.booted_workers"), value: stats.booted_workers,
-type: :gauge, tags: tags)
-        @statsd.send(metric_name: prefixed_metric_name("puma.old_workers"), value: stats.old_workers, type: :gauge,
-tags: tags)
-        @statsd.send(metric_name: prefixed_metric_name("puma.running"), value: stats.running, type: :gauge, tags: tags)
-        @statsd.send(metric_name: prefixed_metric_name("puma.backlog"), value: stats.backlog, type: :gauge, tags: tags)
-        @statsd.send(metric_name: prefixed_metric_name("puma.pool_capacity"), value: stats.pool_capacity, type: :gauge,
-tags: tags)
-        @statsd.send(metric_name: prefixed_metric_name("puma.max_threads"), value: stats.max_threads, type: :gauge,
-tags: tags)
-        @statsd.send(metric_name: prefixed_metric_name("puma.requests_count"), value: stats.requests_count,
-type: :gauge, tags: tags)
+        NexusSemanticLogger.metrics.gauge('puma.workers', stats.workers, tags: tags)
+        NexusSemanticLogger.metrics.gauge('puma.booted_workers', stats.booted_workers, tags: tags)
+        NexusSemanticLogger.metrics.gauge('puma.old_workers', stats.old_workers, tags: tags)
+        NexusSemanticLogger.metrics.gauge('puma.running', stats.running, tags: tags)
+        NexusSemanticLogger.metrics.gauge('puma.backlog', stats.backlog, tags: tags)
+        NexusSemanticLogger.metrics.gauge('puma.pool_capacity', stats.pool_capacity, tags: tags)
+        NexusSemanticLogger.metrics.gauge('puma.max_threads', stats.max_threads, tags: tags)
+        NexusSemanticLogger.metrics.gauge('puma.requests_count', stats.requests_count, tags: tags)
       rescue StandardError => e
-        @log_writer.unknown_error(e, nil, "! statsd: notify stats failed")
+        @log_writer.unknown_error(e, nil, '! statsd: notify stats failed')
       ensure
         sleep(2)
       end
