@@ -20,7 +20,7 @@ module NexusSemanticLogger
             "railsenv:#{Rails.env}",
             "service:#{service}",
             "container_name:#{container_name}",
-            "pod_name:#{pod_name}"
+            "pod_name:#{pod_name}",
           ]
 
           # To enable runtime metrics collection, set `true`. Defaults to `false`
