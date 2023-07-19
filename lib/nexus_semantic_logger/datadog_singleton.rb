@@ -7,7 +7,7 @@ module NexusSemanticLogger
   # own statsd instance.
   class DatadogSingleton
     include Singleton
-    attr_accessor :statsd, :global_tags
+    attr_accessor :statsd
 
     def flush
       statsd&.flush(sync: Rails.env.development?) # Force flush sync in development, speed up checks.
@@ -58,10 +58,9 @@ module NexusSemanticLogger
 
     private
 
-    # Safely combine the global tags with the supplied tags.
+    # Safely combine the supplied tags.
     def combine_tags(tags)
       final_tags = []
-      final_tags += global_tags unless global_tags.nil?
       final_tags += tags unless tags.nil?
       final_tags
     end

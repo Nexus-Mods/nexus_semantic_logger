@@ -7,6 +7,22 @@ module NexusSemanticLogger
     def initialize(service)
       Datadog.configure do |c|
         if ENV['DD_AGENT_HOST'].present?
+
+          # Container and pod names should be set as env vars via the helm chart. Tagging metrics from the app
+          # with these values helps correlation with metrics from the kubernetes cluster.
+          container_name = ENV.fetch('CONTAINER_NAME') { '' }
+          pod_name = ENV.fetch('POD_NAME') { '' }
+
+          # Configure tags to be sent on all metrics.
+          # Note that 'env' is NOT sent- that is set as the default on the agent e.g. staging, canary, production.
+          # It does not necessarily align with the Rails env, and we do not want to double tag the env.
+          global_tags = [
+            "railsenv:#{Rails.env}",
+            "service:#{service}",
+            "container_name:#{container_name}",
+            "pod_name:#{pod_name}"
+          ]
+
           # To enable runtime metrics collection, set `true`. Defaults to `false`
           # You can also set DD_RUNTIME_METRICS_ENABLED=true to configure this.
           c.runtime_metrics.enabled = true
@@ -16,20 +32,19 @@ module NexusSemanticLogger
           datadog_singleton = DatadogSingleton.instance
           datadog_statsd_socket_path = ENV.fetch('DD_STATSD_SOCKET_PATH') { '' }
           datadog_singleton.statsd = if datadog_statsd_socket_path.to_s.strip.empty?
-            Datadog::Statsd.new(ENV['DD_AGENT_HOST'], 8125)
+            Datadog::Statsd.new(ENV['DD_AGENT_HOST'], 8125, tags: global_tags)
           else
-            Datadog::Statsd.new(socket_path: datadog_statsd_socket_path)
+            Datadog::Statsd.new(socket_path: datadog_statsd_socket_path, tags: global_tags)
           end
           c.runtime_metrics.statsd = datadog_singleton.statsd
 
-          # Configure tags to be sent on all metrics.
-          # Note that 'env' is NOT sent- that is set as the default on the agent e.g. staging, canary, production.
-          # It does not necessarily align with the Rails env, and we do not want to double tag the env.
-          datadog_singleton.global_tags = ["railsenv:#{Rails.env}", "service:#{service}"]
           # Trace tags API is Hash<String,String>, see https://www.rubydoc.info/gems/ddtrace/Datadog/Tracing
+          # Should match the global tags, but as a Hash.
           c.tags = {
             railsenv: Rails.env,
             service: service,
+            container_name: container_name,
+            pod_name: pod_name,
           }
 
           # Tracer requires configuration to a datadog agent via DD_AGENT_HOST.
