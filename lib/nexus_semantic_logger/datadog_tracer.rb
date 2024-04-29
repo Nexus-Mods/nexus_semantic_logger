@@ -6,7 +6,8 @@ module NexusSemanticLogger
   class DatadogTracer
     def initialize(service)
       Datadog.configure do |c|
-        if ENV['DD_AGENT_HOST'].present?
+        # When using a socket, DD_AGENT_HOST will not be set, and DD_TRACE_AGENT_URL will be set instead.
+        if ENV['DD_AGENT_HOST'].present? || ENV['DD_TRACE_AGENT_URL'].present?
 
           # Container and pod names should be set as env vars via the helm chart. Tagging metrics from the app
           # with these values helps correlation with metrics from the kubernetes cluster.
