@@ -56,12 +56,6 @@ module NexusSemanticLogger
 
           # Profiling is also provided by ddtrace, we synchronise their feature toggles.
           c.profiling.enabled = dd_tracer_enabled
-
-        else
-          # If there is no DD_AGENT_HOST then ensure features are disabled.
-          c.runtime_metrics.enabled = false
-          c.tracing.enabled = false
-          c.profiling.enabled = false
         end
 
         c.tracing.instrument(:rails, service_name: service)
