@@ -3,9 +3,9 @@
 # noinspection RubyClassVariableUsageInspection
 module NexusSemanticLogger
   class ResponseCodeStatsMiddleware
+    @@code_metrics = Hash.new(0)
     def initialize(app)
       @app = app
-      @@code_metrics = {}
     end
 
     def call(env)
@@ -19,7 +19,7 @@ module NexusSemanticLogger
 
     def self.read_and_reset_metrics
       metrics = @@code_metrics.dup
-      @@code_metrics.clear
+      @@code_metrics = Hash.new(0)
       metrics
     end
   end
