@@ -56,6 +56,15 @@ module NexusSemanticLogger
       flush
     end
 
+    # Delegate to statsd (if available).
+    # @param [String] metric Metric name.
+    # @param [Numeric] value Count value.
+    # @param [Array<String>] tags Additional tags.
+    def count(metric, value, tags: [])
+      statsd&.count(metric, value, tags: combine_tags(tags))
+      flush
+    end
+
     private
 
     # Safely combine the supplied tags.

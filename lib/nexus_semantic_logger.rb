@@ -6,6 +6,7 @@ require 'nexus_semantic_logger/datadog_singleton'
 require 'nexus_semantic_logger/datadog_tracer'
 require 'nexus_semantic_logger/ddtrace_ruby3_patch'
 require 'nexus_semantic_logger/logger_metrics_subscriber'
+require 'nexus_semantic_logger/response_code_stats_middleware'
 
 module NexusSemanticLogger
   # Get application wide object for sending metrics.
