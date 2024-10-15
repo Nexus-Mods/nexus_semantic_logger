@@ -164,14 +164,6 @@ Puma::Plugin.create do
         NexusSemanticLogger.metrics.gauge('puma.pool_capacity', stats.pool_capacity, tags: tags)
         NexusSemanticLogger.metrics.gauge('puma.max_threads', stats.max_threads, tags: tags)
         NexusSemanticLogger.metrics.count('puma.requests_count', stats.requests_count, tags: tags)
-
-        NexusSemanticLogger::ResponseCodeStatsMiddleware.read_and_reset_metrics.each do |code, count|
-          NexusSemanticLogger.metrics.count(
-            "puma.rack.response.status",
-            count,
-            tags: tags + ["response_status:#{code}"]
-          )
-        end
       rescue StandardError => e
         @log_writer.unknown_error(e, nil, '! statsd: notify stats failed')
       ensure

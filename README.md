@@ -10,7 +10,6 @@ As well as providing a semantic logger, this gem handles datadog telemetry assoc
 * traces
 * metrics
     * statsd is automatically attached to datadog runtime metrics and may also be used for custom metrics.
-    * `ResponseCodeStatsMiddleware` is included to capture response code metrics from rack applications
 
 ### Customise log level per logger
 
@@ -59,13 +58,6 @@ For example, to increment a count:
 
 ```
 NexusSemanticLogger.metrics.increment('nexus.users.registration.complete')
-```
-
-### Rack response code metrics
-This can be configured with a middleware in application.rb
-
-```
-config.middleware.use ResponseCodeStatsMiddleware
 ```
 
 # Local gem development
