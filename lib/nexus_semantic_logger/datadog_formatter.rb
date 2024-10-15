@@ -27,7 +27,7 @@ module NexusSemanticLogger
       hash.delete(:application)
       hash.delete(:environment)
       hash.delete('')
-      # ddtrace correlation inserted via log_tags, but datadog expects them in the root hash.
+      # datadog correlation inserted via log_tags, but datadog expects them in the root hash.
       named_tags = hash.delete(:named_tags)
       if named_tags.is_a?(Hash)
         hash.deep_merge!(named_tags)

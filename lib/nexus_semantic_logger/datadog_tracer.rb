@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 require 'datadog/statsd'
-require 'ddtrace'
+require 'datadog'
 
 module NexusSemanticLogger
   class DatadogTracer
@@ -54,13 +54,13 @@ module NexusSemanticLogger
           dd_tracer_enabled = Rails.env.production? || dd_force_tracer
           c.tracing.enabled = dd_tracer_enabled
 
-          # Profiling is also provided by ddtrace, we synchronise their feature toggles.
+          # Profiling is also provided by datadog, we synchronise their feature toggles.
           c.profiling.enabled = dd_tracer_enabled
         end
 
         c.tracing.instrument(:rails, service_name: service)
 
-        c.logger.level = Logger::WARN # ddtrace info logging is too verbose.
+        c.logger.level = Logger::WARN # datadog info logging is too verbose.
       end
     end
   end
