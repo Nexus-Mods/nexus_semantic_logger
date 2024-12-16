@@ -19,6 +19,6 @@ Gem::Specification.new do |spec|
   spec.add_dependency('google-protobuf', '~> 3.25.5')
   spec.add_dependency('net_tcp_client', '~> 2.2.0') # For TCP logging.
   spec.add_dependency('rails_semantic_logger', '~> 4.17.0')
-  spec.add_dependency('semantic_logger', '<= 4.16.0')
+  spec.add_dependency('semantic_logger', '~> 4.16.1')
   spec.required_ruby_version = Gem::Requirement.new('>= 2.7.0')
 end
