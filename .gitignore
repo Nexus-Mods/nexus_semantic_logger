@@ -2,3 +2,4 @@
 .vscode/
 results/
 Gemfile.lock
+gemfiles/*.gemfile.lock
