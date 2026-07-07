@@ -60,6 +60,20 @@ For example, to increment a count:
 NexusSemanticLogger.metrics.increment('nexus.users.registration.complete')
 ```
 
+### Running shell commands
+
+Use `NexusSemanticLogger.shell.capture3` as a drop-in replacement for `Open3.capture3`:
+
+```
+stdout, stderr, status = NexusSemanticLogger.shell.capture3('7z', 'x', archive_path)
+```
+
+Each call is wrapped in a Datadog APM span (`shell.exec`) and emits `nexus.shell.duration_ms`,
+`nexus.shell.peak_rss_mb` (the child's peak RSS, sampled from procfs) and `nexus.shell.executions`
+metrics tagged with `command:<binary>` and `outcome:<success|failure|signaled|exception>`, plus an
+info log line. A child killed by the kernel OOM killer shows up as `outcome:signaled` with
+`termsig: 9` and its last-observed peak RSS.
+
 # Local gem development
 
 Steps to run this gem from local sources in one the nexus 'staged build' rails components:
