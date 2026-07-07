@@ -42,7 +42,7 @@ module NexusSemanticLogger
       end
     ensure
       duration_ms = ((Process.clock_gettime(Process::CLOCK_MONOTONIC) - started_at) * 1000).round
-      record(binary, cmd, outcome, duration_ms, status, peak_rss_kb)
+      record(cmd, outcome, duration_ms, status, peak_rss_kb)
     end
 
     private
@@ -123,8 +123,8 @@ module NexusSemanticLogger
       span.set_tag('shell.peak_rss_mb', to_mb(peak_rss_kb)) if peak_rss_kb
     end
 
-    def record(binary, cmd, outcome, duration_ms, status, peak_rss_kb)
-      tags = ["command:#{binary}", "outcome:#{outcome}"]
+    def record(cmd, outcome, duration_ms, status, peak_rss_kb)
+      tags = ["command:#{command_basename(cmd)}", "outcome:#{outcome}"]
       metrics = NexusSemanticLogger.metrics
       metrics.timing("#{METRIC_PREFIX}.duration_ms", duration_ms, tags: tags)
       metrics.increment("#{METRIC_PREFIX}.executions", tags: tags)
@@ -152,10 +152,8 @@ module NexusSemanticLogger
     end
 
     def command_string(cmd)
-      cmd.reject { |part| part.is_a?(Hash) }
-         .flatten
-         .join(' ')
-         .slice(0, COMMAND_LOG_MAX_CHARS)
+      parts = cmd.reject { |part| part.is_a?(Hash) }
+      parts.flatten.join(' ').slice(0, COMMAND_LOG_MAX_CHARS)
     end
 
     def to_mb(kb)

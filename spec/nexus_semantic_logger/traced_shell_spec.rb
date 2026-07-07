@@ -75,7 +75,7 @@ RSpec.describe(NexusSemanticLogger::TracedShell) do
       shell.capture3(RbConfig.ruby, "-e", 'a = "x" * 50_000_000; sleep 0.3; a.length')
 
       expect(metrics).to(have_received(:distribution)
-        .with("nexus.shell.peak_rss_mb", (be >= 50), tags: ["command:ruby", "outcome:success"]))
+        .with("nexus.shell.peak_rss_mb", be >= 50, tags: ["command:ruby", "outcome:success"]))
     end
 
     it "excludes a leading env hash from the logged command" do
