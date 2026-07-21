@@ -56,7 +56,7 @@ module NexusSemanticLogger
           c.profiling.enabled = dd_tracer_enabled
         end
 
-        c.tracing.instrument(:rails, service_name: service, request_queuing: true)
+        c.tracing.instrument(:rails, service_name: service, request_queuing: true, web_service_name: service)
 
         c.logger.level = Logger::WARN # datadog info logging is too verbose.
       end
