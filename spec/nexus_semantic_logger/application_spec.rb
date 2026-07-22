@@ -12,15 +12,14 @@ RSpec.describe(NexusSemanticLogger::Application) do
       c.semantic_logger = sl_config
     end
   end
+  let(:traps) { {} }
 
   before do
     allow(SemanticLogger).to(receive(:sync!))
     allow(SemanticLogger).to(receive(:on_log))
     allow(NexusSemanticLogger::DatadogTracer).to(receive(:new))
-    allow_any_instance_of(NexusSemanticLogger::AppenderFilter).to(receive(:add_signal_handler))
+    allow(Signal).to(receive(:trap)) { |signal, &handler| traps[signal] = handler }
   end
-
-  after { NexusSemanticLogger.appender_filter = nil }
 
   describe ".common" do
     it "defaults the log level to WARN" do
@@ -45,7 +44,7 @@ RSpec.describe(NexusSemanticLogger::Application) do
       expect(correlation.keys).to(contain_exactly(:trace_id, :span_id, :env, :service, :version))
     end
 
-    it "uses the datadog formatter for a stdout appender with the shared filter" do
+    it "uses the datadog formatter for a stdout appender filtered by the policy" do
       expect(sl_config).to(receive(:add_appender)) do |io:, formatter:|
         expect(io).to(be($stdout))
         expect(formatter).to(be_a(NexusSemanticLogger::DatadogFormatter))
@@ -59,10 +58,10 @@ RSpec.describe(NexusSemanticLogger::Application) do
       expect(config.rails_semantic_logger.add_file_appender).to(be(false))
     end
 
-    it "builds the shared filter from the supplied env and log level" do
+    it "carries the policy on the config, built from the supplied env" do
       described_class.common(config, "my-service", env: { "LOG_NAMES_DEFAULT_LEVEL" => "error" })
 
-      expect(NexusSemanticLogger.appender_filter.default_level).to(eq(:error))
+      expect(config.nexus_semantic_logger.level_policy.default_level).to(eq(:error))
     end
 
     it "enables synchronous logging before adding appenders" do
@@ -78,6 +77,20 @@ RSpec.describe(NexusSemanticLogger::Application) do
 
       described_class.common(config, "my-service", env: {})
     end
+
+    it "registers a level cycling signal handler against the shared policy" do
+      described_class.common(config, "my-service", env: { "LOG_NAMES_DEFAULT_LEVEL" => "warn" })
+      policy = config.nexus_semantic_logger.level_policy
+
+      expect { traps["WINCH"].call }.to(output(/changed LOG_NAMES_DEFAULT_LEVEL from warn to error/).to_stdout)
+      expect(policy.default_level).to(eq(:error))
+    end
+
+    it "registers an info signal handler reporting the current levels" do
+      described_class.common(config, "my-service", env: { "LOG_NAMES_DEFAULT_LEVEL" => "warn" })
+
+      expect { traps["SYS"].call }.to(output(/LOG_LEVEL=WARN LOG_NAMES_DEFAULT_LEVEL=warn/).to_stdout)
+    end
   end
 
   describe ".development" do
@@ -88,6 +101,15 @@ RSpec.describe(NexusSemanticLogger::Application) do
       described_class.development(config, env: {})
 
       expect(config.log_level).to(eq("DEBUG"))
+    end
+
+    it "reuses the policy that common placed on the config" do
+      described_class.common(config, "my-service", env: { "LOG_NAMES_DEFAULT_LEVEL" => "error" })
+      policy = config.nexus_semantic_logger.level_policy
+
+      described_class.development(config, env: {})
+
+      expect(config.nexus_semantic_logger.level_policy).to(be(policy))
     end
 
     it "adds a TCP datadog appender when a local agent is configured" do
@@ -108,12 +130,32 @@ RSpec.describe(NexusSemanticLogger::Application) do
   end
 
   describe ".test" do
-    it "switches to a colour appender with the shared filter" do
+    it "switches to a colour appender filtered by the policy" do
       expect(sl_config).to(receive(:clear_appenders!))
       expect(sl_config).to(receive(:add_appender).with(io: $stdout, formatter: :color).and_return(appender))
       expect(appender).to(receive(:filter=).with(an_instance_of(Proc)))
 
-      described_class.test(config)
+      described_class.test(config, env: {})
+    end
+  end
+
+  describe "signal delivery (integration)" do
+    before { allow(Signal).to(receive(:trap).and_call_original) }
+
+    after do
+      Signal.trap("WINCH", "DEFAULT")
+      Signal.trap("SYS", "DEFAULT")
+    end
+
+    it "cycles the policy level when a real WINCH signal arrives" do
+      described_class.common(config, "my-service", env: { "LOG_NAMES_DEFAULT_LEVEL" => "warn" })
+      policy = config.nexus_semantic_logger.level_policy
+
+      Process.kill("WINCH", Process.pid)
+      deadline = Time.now + 2
+      sleep(0.05) while policy.default_level == :warn && Time.now < deadline
+
+      expect(policy.default_level).to(eq(:error))
     end
   end
 end

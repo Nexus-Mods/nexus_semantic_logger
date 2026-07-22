@@ -30,19 +30,18 @@ module NexusSemanticLogger
       # Synchronous mode is vital when puma is in single thread mode. Must add appender AFTER setting sync.
       SemanticLogger.sync!
 
+      # The policy is carried on the Rails config so that the environment
+      # specific setup below reuses the same instance, keeping signal driven
+      # level changes visible to every appender.
+      policy = level_policy(config, env)
+
       # Default logging is stdout in datadog compatible JSON.
       config.rails_semantic_logger.format = NexusSemanticLogger::DatadogFormatter.new(service)
       config.rails_semantic_logger.add_file_appender = false
       dd_appender = config.semantic_logger.add_appender(io: $stdout, formatter: config.rails_semantic_logger.format)
+      dd_appender.filter = policy.to_proc
 
-      # One shared filter instance for every appender, so the signal handler
-      # changes the level everywhere at once.
-      NexusSemanticLogger.appender_filter = NexusSemanticLogger::AppenderFilter.new(
-        env: env,
-        fallback_level: config.log_level,
-      )
-      dd_appender.filter = NexusSemanticLogger.appender_filter.to_proc
-      NexusSemanticLogger.appender_filter.add_signal_handler
+      add_signal_handlers(policy, config.log_level)
 
       NexusSemanticLogger::DatadogTracer.new(service, env: env)
 
@@ -60,10 +59,12 @@ module NexusSemanticLogger
       # Enable debug globally.
       config.log_level = env.fetch('LOG_LEVEL', 'DEBUG')
 
+      policy = level_policy(config, env)
+
       # Change default logging to coloured logging on stdout.
       config.semantic_logger.clear_appenders!
       color_appender = config.semantic_logger.add_appender(io: $stdout, formatter: :color)
-      color_appender.filter = NexusSemanticLogger.appender_filter.to_proc
+      color_appender.filter = policy.to_proc
 
       if env['DD_AGENT_HOST'].present? && env['DD_AGENT_LOGGING_PORT'].present?
         # Development logs can be sent to datadog via a TCP logging endpoint on a local agent.
@@ -74,7 +75,7 @@ module NexusSemanticLogger
           server: "#{env['DD_AGENT_HOST']}:#{env['DD_AGENT_LOGGING_PORT']}",
           formatter: config.rails_semantic_logger.format
         )
-        dd_appender.filter = NexusSemanticLogger.appender_filter.to_proc
+        dd_appender.filter = policy.to_proc
       end
 
       logger.info('SemanticLogger initialised in development.', level: config.log_level)
@@ -83,14 +84,50 @@ module NexusSemanticLogger
       $stdout.sync = true
     end
 
-    def self.test(config)
+    def self.test(config, env: ENV)
+      policy = level_policy(config, env)
+
       # Use human readable coloured output for logs when running tests.
       config.semantic_logger.clear_appenders!
       color_appender = config.semantic_logger.add_appender(io: $stdout, formatter: :color)
-      color_appender.filter = NexusSemanticLogger.appender_filter.to_proc
+      color_appender.filter = policy.to_proc
 
       # Ensure logging is immediately flushed.
       $stdout.sync = true
     end
+
+    # The shared policy for this application, memoized on the Rails config
+    # object that every setup method already receives. common runs first in a
+    # normal boot, but each entry point can build the policy so none of them
+    # depend on call order.
+    def self.level_policy(config, env)
+      config.nexus_semantic_logger ||= ActiveSupport::OrderedOptions.new
+      config.nexus_semantic_logger.level_policy ||= LevelPolicy.from_env(env, fallback_level: config.log_level)
+    end
+    private_class_method :level_policy
+
+    # Change LOG_NAMES_DEFAULT_LEVEL on a running process by sending signals.
+    # The level signal cycles through the levels, wrapping around. The info
+    # signal reports the current levels.
+    # Note that USR1/USR2 are already used by puma. WINCH/SYS should be unused these days.
+    # The handlers only touch plain policy state, keeping them trap safe.
+    def self.add_signal_handlers(policy, log_level, level_signal: 'WINCH', info_signal: 'SYS')
+      Signal.trap(level_signal) do
+        previous_level = policy.default_level
+        policy.cycle_default_level!
+        puts "#{level_signal} signal changed LOG_NAMES_DEFAULT_LEVEL from #{previous_level} to #{policy.default_level}"
+      rescue => err
+        puts "Error handling signal #{level_signal}: #{err}"
+        puts err.backtrace
+      end
+
+      Signal.trap(info_signal) do
+        puts "#{info_signal} signal reports LOG_LEVEL=#{log_level} LOG_NAMES_DEFAULT_LEVEL=#{policy.default_level}"
+      rescue => err
+        puts "Error handling signal #{info_signal}: #{err}"
+        puts err.backtrace
+      end
+    end
+    private_class_method :add_signal_handlers
   end
 end
