@@ -12,7 +12,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        gemfile: [rails_7_1, rails_7_2, rails_8_0]
+        gemfile: [rails_7_1, rails_7_2, rails_8_0, rails_8_1]
     env:
       BUNDLE_GEMFILE: gemfiles/${{ matrix.gemfile }}.gemfile
     steps:
