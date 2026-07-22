@@ -139,6 +139,46 @@ RSpec.describe(NexusSemanticLogger::Application) do
     end
   end
 
+  describe "rails_semantic_logger compatibility warning" do
+    it "logs an error when RuntimeRegistry lacks sql_runtime on rails_semantic_logger 4.x" do
+      stub_const("ActiveRecord::RuntimeRegistry", Module.new)
+      stub_const("RailsSemanticLogger::VERSION", "4.17.0")
+
+      expect(described_class.logger).to(receive(:error).with(/rails_semantic_logger", ">= 5.1"/))
+
+      described_class.send(:warn_on_incompatible_rails_semantic_logger)
+    end
+
+    it "stays quiet when sql_runtime is available" do
+      registry = Module.new do
+        def self.sql_runtime
+          0.0
+        end
+      end
+      stub_const("ActiveRecord::RuntimeRegistry", registry)
+      stub_const("RailsSemanticLogger::VERSION", "4.17.0")
+
+      expect(described_class.logger).not_to(receive(:error))
+
+      described_class.send(:warn_on_incompatible_rails_semantic_logger)
+    end
+
+    it "stays quiet on rails_semantic_logger 5.x" do
+      stub_const("ActiveRecord::RuntimeRegistry", Module.new)
+      stub_const("RailsSemanticLogger::VERSION", "5.1.0")
+
+      expect(described_class.logger).not_to(receive(:error))
+
+      described_class.send(:warn_on_incompatible_rails_semantic_logger)
+    end
+
+    it "stays quiet when ActiveRecord is not loaded" do
+      expect(described_class.logger).not_to(receive(:error))
+
+      described_class.send(:warn_on_incompatible_rails_semantic_logger)
+    end
+  end
+
   describe "signal delivery (integration)" do
     before { allow(Signal).to(receive(:trap).and_call_original) }
 
