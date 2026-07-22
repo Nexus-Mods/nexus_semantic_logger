@@ -31,9 +31,6 @@ module NexusSemanticLogger
         # Synchronous mode is vital when puma is in single thread mode. Must add appender AFTER setting sync.
         SemanticLogger.sync!
 
-        # The policy is carried on the Rails config so that the environment
-        # specific setup below reuses the same instance, keeping signal driven
-        # level changes visible to every appender.
         policy = level_policy(config, env)
 
         # Default logging is stdout in datadog compatible JSON.
@@ -100,20 +97,15 @@ module NexusSemanticLogger
 
       private
 
-      # The shared policy for this application, memoized on the Rails config
-      # object that every setup method already receives. common runs first in a
-      # normal boot, but each entry point can build the policy so none of them
-      # depend on call order.
+      # Memoized on the config so every entry point shares one instance.
       def level_policy(config, env)
         config.nexus_semantic_logger ||= ActiveSupport::OrderedOptions.new
         config.nexus_semantic_logger.level_policy ||= LevelPolicy.from_env(env, fallback_level: config.log_level)
       end
 
-      # Change LOG_NAMES_DEFAULT_LEVEL on a running process by sending signals.
-      # The level signal cycles through the levels, wrapping around. The info
-      # signal reports the current levels.
-      # Note that USR1/USR2 are already used by puma. WINCH/SYS should be unused these days.
-      # The handlers only touch plain policy state, keeping them trap safe.
+      # Cycle LOG_NAMES_DEFAULT_LEVEL or report levels on a running process.
+      # USR1/USR2 are taken by puma. Handlers only touch plain policy state,
+      # keeping them trap safe.
       def add_signal_handlers(policy, log_level, level_signal: 'WINCH', info_signal: 'SYS')
         Signal.trap(level_signal) do
           previous_level = policy.default_level
@@ -133,19 +125,14 @@ module NexusSemanticLogger
         end
       end
 
-      # Nothing at the dependency level stops a Rails 8.1 app resolving
-      # rails_semantic_logger 4.x, which installs fine there but raises
-      # NoMethodError on every sql.active_record event because Rails 8.1 moved
-      # ActiveRecord::RuntimeRegistry.sql_runtime onto a stats object. A gemspec
-      # cannot express the conditional constraint, so detect the symptom at boot
-      # and say what to do. Apps carrying their own compatibility shim restore
-      # sql_runtime and stay quiet here.
+      # Rails 8.1 needs rails_semantic_logger 5.x and no gemspec can express
+      # that, so detect the broken pairing at boot. Shimmed apps stay quiet.
       def warn_on_incompatible_rails_semantic_logger
         return unless defined?(::ActiveRecord::RuntimeRegistry)
         return if ::ActiveRecord::RuntimeRegistry.respond_to?(:sql_runtime)
         return if Gem::Version.new(RailsSemanticLogger::VERSION) >= Gem::Version.new('5.0')
 
-        logger.error(
+        logger.warn(
           'rails_semantic_logger 4.x cannot log ActiveRecord events on this Rails version, every ' \
           'sql.active_record event will log a NoMethodError instead of the query. Add ' \
           '`gem "rails_semantic_logger", ">= 5.1"` to your Gemfile so bundler refuses this ' \
