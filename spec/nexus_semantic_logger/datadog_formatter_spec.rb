@@ -6,8 +6,7 @@ require "nexus_semantic_logger/datadog_formatter"
 RSpec.describe(NexusSemanticLogger::DatadogFormatter) do
   subject(:formatter) { described_class.new("my-service") }
 
-  # Appenders pass themselves as the logger argument. The formatter only reads
-  # host, application and environment from it.
+  # Appenders pass themselves as the logger argument.
   let(:appender) { Struct.new(:host, :application, :environment).new("spec-host", "app", "env") }
 
   let(:log) do

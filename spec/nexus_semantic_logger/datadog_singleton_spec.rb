@@ -2,6 +2,7 @@
 
 require "rails_helper"
 require "nexus_semantic_logger"
+require_relative "../support/fake_statsd"
 
 RSpec.describe(NexusSemanticLogger::DatadogSingleton) do
   subject(:singleton) { described_class.instance }
@@ -19,44 +20,47 @@ RSpec.describe(NexusSemanticLogger::DatadogSingleton) do
   end
 
   context "when a statsd instance is configured" do
-    let(:statsd) { instance_double(Datadog::Statsd, flush: nil) }
-    let(:sync) { Rails.env.development? }
+    let(:statsd) { FakeStatsd.new }
 
     before { singleton.statsd = statsd }
 
-    it "delegates increment and flushes" do
-      expect(statsd).to(receive(:increment).with("metric", tags: ["a:b"]))
-      expect(statsd).to(receive(:flush).with(sync: sync))
-
+    it "delegates increment and flushes, forcing sync in development" do
       singleton.increment("metric", tags: ["a:b"])
+
+      expect(statsd.calls).to(eq([
+        [:increment, "metric", { tags: ["a:b"] }],
+        [:flush, { sync: Rails.env.development? }],
+      ]))
     end
 
     it "delegates decrement" do
-      expect(statsd).to(receive(:decrement).with("metric", tags: []))
-
       singleton.decrement("metric")
+
+      expect(statsd.calls).to(include([:decrement, "metric", { tags: [] }]))
     end
 
     it "delegates timing" do
-      expect(statsd).to(receive(:timing).with("metric", 12, tags: []))
-
       singleton.timing("metric", 12)
+
+      expect(statsd.calls).to(include([:timing, "metric", 12, { tags: [] }]))
     end
 
     it "delegates distribution, gauge and count" do
-      expect(statsd).to(receive(:distribution).with("metric", 1.5, tags: []))
-      expect(statsd).to(receive(:gauge).with("metric", 7, tags: []))
-      expect(statsd).to(receive(:count).with("metric", 3, tags: []))
-
       singleton.distribution("metric", 1.5)
       singleton.gauge("metric", 7)
       singleton.count("metric", 3)
+
+      expect(statsd.calls).to(include(
+        [:distribution, "metric", 1.5, { tags: [] }],
+        [:gauge, "metric", 7, { tags: [] }],
+        [:count, "metric", 3, { tags: [] }],
+      ))
     end
 
     it "treats nil tags as an empty tag list" do
-      expect(statsd).to(receive(:increment).with("metric", tags: []))
-
       singleton.increment("metric", tags: nil)
+
+      expect(statsd.calls).to(include([:increment, "metric", { tags: [] }]))
     end
   end
 end

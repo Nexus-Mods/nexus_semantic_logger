@@ -2,13 +2,15 @@
 
 require "spec_helper"
 require "nexus_semantic_logger"
+require_relative "../support/fake_statsd"
 
 RSpec.describe(NexusSemanticLogger::LoggerMetricsSubscriber) do
   subject(:subscriber) { described_class.new }
 
-  let(:statsd) { instance_double(Datadog::Statsd) }
+  let(:statsd) { FakeStatsd.new }
 
-  before { allow(NexusSemanticLogger).to(receive(:metrics).and_return(statsd)) }
+  before { NexusSemanticLogger.metrics.statsd = statsd }
+  after { NexusSemanticLogger.metrics.statsd = nil }
 
   def build_log(**attrs)
     SemanticLogger::Log.new("SpecLogger", :info).tap do |log|
@@ -16,27 +18,27 @@ RSpec.describe(NexusSemanticLogger::LoggerMetricsSubscriber) do
     end
   end
 
-  it "sends timing metrics for logs with a duration" do
-    expect(statsd).to(receive(:timing).with("spec.metric", 12.5, tags: ["foo:bar"]))
-
+  it "sends timing metrics for logs with a duration, tagged with the payload" do
     subscriber.call(build_log(metric: "spec.metric", duration: 12.5, payload: { foo: "bar" }))
+
+    expect(statsd.calls).to(include([:timing, "spec.metric", 12.5, { tags: ["foo:bar"] }]))
   end
 
   it "increments a counter for metric logs without a duration" do
-    expect(statsd).to(receive(:increment).with("spec.count", tags: nil))
-
     subscriber.call(build_log(metric: "spec.count"))
+
+    expect(statsd.calls).to(include([:increment, "spec.count", { tags: [] }]))
   end
 
   it "decrements when the metric amount is negative" do
-    expect(statsd).to(receive(:decrement).with("spec.count", tags: nil))
-
     subscriber.call(build_log(metric: "spec.count", metric_amount: -1))
+
+    expect(statsd.calls).to(include([:decrement, "spec.count", { tags: [] }]))
   end
 
   it "ignores logs without a metric" do
-    expect(statsd).not_to(receive(:increment))
-
     subscriber.call(build_log(message: "no metric"))
+
+    expect(statsd.calls).to(be_empty)
   end
 end

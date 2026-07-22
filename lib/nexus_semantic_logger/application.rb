@@ -6,6 +6,9 @@ module NexusSemanticLogger
     include SemanticLogger::Loggable
 
     class << self
+      # @param [Rails::Application::Configuration] config
+      # @param [String] service Datadog service name, must match the APM service.
+      # @param [Hash] env Configuration source, ENV by default.
       def common(config, service, env: ENV)
         # Set a safe logging level which individual environments can make more verbose if needed.
         config.log_level = env.fetch('LOG_LEVEL', 'WARN')
@@ -54,6 +57,8 @@ module NexusSemanticLogger
         end
       end
 
+      # @param [Rails::Application::Configuration] config
+      # @param [Hash] env Configuration source, ENV by default.
       def development(config, env: ENV)
         # Enable debug globally.
         config.log_level = env.fetch('LOG_LEVEL', 'DEBUG')
@@ -83,6 +88,8 @@ module NexusSemanticLogger
         $stdout.sync = true
       end
 
+      # @param [Rails::Application::Configuration] config
+      # @param [Hash] env Configuration source, ENV by default.
       def test(config, env: ENV)
         policy = level_policy(config, env)
 

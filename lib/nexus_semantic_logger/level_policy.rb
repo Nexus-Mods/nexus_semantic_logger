@@ -3,13 +3,7 @@ require 'rails_semantic_logger'
 
 module NexusSemanticLogger
   # The log level policy: a default level plus per logger-name overrides.
-  #
-  # Instances hold plain, explicit state. Parsing of the env var scheme lives
-  # in .from_env, and runtime concerns like signal handling live with the
-  # application wiring (see Application), not here.
-  #
-  # The default level is the one piece of runtime-mutable state, so that the
-  # level of a running process can be cycled without a restart.
+  # The default level is mutable so a running process can cycle it.
   class LevelPolicy
     LEVEL_NAME_VARS = {
       trace: 'LOG_NAMES_TRACE',
@@ -22,11 +16,11 @@ module NexusSemanticLogger
 
     attr_reader :default_level, :overrides
 
-    # Parse a policy from an env hash (ENV or a plain hash in tests):
-    #   LOG_NAMES_DEFAULT_LEVEL  level for loggers without an override.
-    #   LOG_NAMES_TRACE ... LOG_NAMES_FATAL  comma separated logger names that
-    #     log at that level regardless of the default.
-    # A name appearing in several lists keeps the most verbose level.
+    # LOG_NAMES_DEFAULT_LEVEL sets the default, LOG_NAMES_<LEVEL> lists names
+    # pinned to that level. A name in several lists keeps the most verbose.
+    # @param [Hash] env Configuration source, ENV or a plain hash.
+    # @param [String, Symbol, nil] fallback_level Used when the env vars are absent.
+    # @return [LevelPolicy]
     def self.from_env(env, fallback_level: nil)
       overrides = {}
       LEVEL_NAME_VARS.each do |level, var|
@@ -40,7 +34,7 @@ module NexusSemanticLogger
     end
 
     # @param [String, Symbol] default_level Normalized to a lowercase Symbol.
-    # @param [Hash<String, String|Symbol>] overrides Logger name to level.
+    # @param [Hash<String, String, Symbol>] overrides Logger name to level.
     def initialize(default_level:, overrides: {})
       @default_level = self.class.normalize_level(default_level)
       @overrides = overrides.transform_values { |level| self.class.normalize_level(level) }.freeze
@@ -54,6 +48,7 @@ module NexusSemanticLogger
     end
 
     # SemanticLogger 4.x only accepts a Proc or Regexp as an appender filter.
+    # @return [Proc]
     def to_proc
       ->(log) { call(log) }
     end

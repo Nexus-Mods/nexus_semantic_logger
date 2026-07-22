@@ -18,9 +18,8 @@ Gem::Specification.new do |spec|
   spec.add_dependency('dogstatsd-ruby', '~> 5.7') # For custom application metrics.
   spec.add_dependency('google-protobuf', '~> 3.25.5')
   spec.add_dependency('net_tcp_client', '~> 2.2.0') # For TCP logging.
-  # Widened so bundler can resolve per app. Rails 8.1 needs rails_semantic_logger
-  # >= 5.1 (no 4.x release supports it), and 5.x requires railties >= 7.2 plus
-  # semantic_logger >= 5.1, so apps on Rails 7.1 resolve 4.x and newer apps 5.x.
+  # Wide on purpose. Rails 8.1 needs rails_semantic_logger 5.x, older Rails
+  # resolves 4.x because 5.x requires railties >= 7.2.
   spec.add_dependency('rails_semantic_logger', '>= 4.17', '< 6')
   spec.add_dependency('semantic_logger', '>= 4.16.1', '< 6')
   spec.required_ruby_version = Gem::Requirement.new('>= 2.7.0')

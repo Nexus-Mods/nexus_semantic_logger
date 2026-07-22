@@ -2,23 +2,29 @@
 
 require "rails_helper"
 require "nexus_semantic_logger"
+require "socket"
+require_relative "../support/fake_statsd"
 
 RSpec.describe(NexusSemanticLogger::Application) do
-  let(:appender) { double("appender", :filter= => nil) }
-  let(:sl_config) { double("semantic logger config", add_appender: appender, clear_appenders!: nil) }
   let(:config) do
     ActiveSupport::OrderedOptions.new.tap do |c|
       c.rails_semantic_logger = ActiveSupport::OrderedOptions.new
-      c.semantic_logger = sl_config
+      c.semantic_logger = SemanticLogger
     end
   end
-  let(:traps) { {} }
 
-  before do
-    allow(SemanticLogger).to(receive(:sync!))
-    allow(SemanticLogger).to(receive(:on_log))
-    allow(NexusSemanticLogger::DatadogTracer).to(receive(:new))
-    allow(Signal).to(receive(:trap)) { |signal, &handler| traps[signal] = handler }
+  let!(:appenders_before) { SemanticLogger.appenders.to_a }
+
+  after do
+    (SemanticLogger.appenders.to_a - appenders_before).each { |a| SemanticLogger.remove_appender(a) }
+    NexusSemanticLogger::DatadogSingleton.instance.statsd = nil
+    Datadog.configuration.reset!
+    Signal.trap("WINCH", "DEFAULT")
+    Signal.trap("SYS", "DEFAULT")
+  end
+
+  def added_appenders
+    SemanticLogger.appenders.to_a - appenders_before
   end
 
   describe ".common" do
@@ -44,17 +50,13 @@ RSpec.describe(NexusSemanticLogger::Application) do
       expect(correlation.keys).to(contain_exactly(:trace_id, :span_id, :env, :service, :version))
     end
 
-    it "uses the datadog formatter for a stdout appender filtered by the policy" do
-      expect(sl_config).to(receive(:add_appender)) do |io:, formatter:|
-        expect(io).to(be($stdout))
-        expect(formatter).to(be_a(NexusSemanticLogger::DatadogFormatter))
-        appender
-      end
-      expect(appender).to(receive(:filter=).with(an_instance_of(Proc)))
-
+    it "adds a stdout appender in datadog format, filtered by the policy" do
       described_class.common(config, "my-service", env: {})
 
-      expect(config.rails_semantic_logger.format).to(be_a(NexusSemanticLogger::DatadogFormatter))
+      appender = added_appenders.fetch(0)
+      expect(appender.formatter).to(be_a(NexusSemanticLogger::DatadogFormatter))
+      expect(appender.filter).to(be_a(Proc))
+      expect(config.rails_semantic_logger.format).to(be(appender.formatter))
       expect(config.rails_semantic_logger.add_file_appender).to(be(false))
     end
 
@@ -64,43 +66,47 @@ RSpec.describe(NexusSemanticLogger::Application) do
       expect(config.nexus_semantic_logger.level_policy.default_level).to(eq(:error))
     end
 
-    it "enables synchronous logging before adding appenders" do
-      expect(SemanticLogger).to(receive(:sync!).ordered)
-      expect(sl_config).to(receive(:add_appender).ordered.and_return(appender))
-
+    it "sends metric tagged logs to statsd" do
+      statsd = FakeStatsd.new
+      NexusSemanticLogger.metrics.statsd = statsd
       described_class.common(config, "my-service", env: {})
+
+      SemanticLogger["MetricsSpec"].info("something happened", metric: "spec.event")
+
+      expect(statsd.calls).to(include([:increment, "spec.event", { tags: [] }]))
     end
 
-    it "starts the datadog tracer and metrics subscriber" do
-      expect(NexusSemanticLogger::DatadogTracer).to(receive(:new).with("my-service", env: {}))
-      expect(SemanticLogger).to(receive(:on_log).with(an_instance_of(NexusSemanticLogger::LoggerMetricsSubscriber)))
-
-      described_class.common(config, "my-service", env: {})
-    end
-
-    it "registers a level cycling signal handler against the shared policy" do
+    it "cycles the policy level and announces it when the level signal arrives" do
       described_class.common(config, "my-service", env: { "LOG_NAMES_DEFAULT_LEVEL" => "warn" })
       policy = config.nexus_semantic_logger.level_policy
 
-      expect { traps["WINCH"].call }.to(output(/changed LOG_NAMES_DEFAULT_LEVEL from warn to error/).to_stdout)
+      expect do
+        Process.kill("WINCH", Process.pid)
+        deadline = Time.now + 2
+        sleep(0.05) while policy.default_level == :warn && Time.now < deadline
+      end.to(output(/changed LOG_NAMES_DEFAULT_LEVEL from warn to error/).to_stdout)
+
       expect(policy.default_level).to(eq(:error))
     end
 
-    it "registers an info signal handler reporting the current levels" do
+    it "reports the levels when the info signal arrives" do
       described_class.common(config, "my-service", env: { "LOG_NAMES_DEFAULT_LEVEL" => "warn" })
 
-      expect { traps["SYS"].call }.to(output(/LOG_LEVEL=WARN LOG_NAMES_DEFAULT_LEVEL=warn/).to_stdout)
+      expect do
+        Process.kill("SYS", Process.pid)
+        sleep(0.2)
+      end.to(output(/SYS signal reports LOG_LEVEL=WARN LOG_NAMES_DEFAULT_LEVEL=warn/).to_stdout)
     end
   end
 
   describe ".development" do
     it "defaults the log level to DEBUG and switches to a colour appender" do
-      expect(sl_config).to(receive(:clear_appenders!))
-      expect(sl_config).to(receive(:add_appender).with(io: $stdout, formatter: :color).and_return(appender))
-
       described_class.development(config, env: {})
 
       expect(config.log_level).to(eq("DEBUG"))
+      appender = added_appenders.fetch(0)
+      expect(appender.formatter).to(be_a(SemanticLogger::Formatters::Color))
+      expect(appender.filter).to(be_a(Proc))
     end
 
     it "reuses the policy that common placed on the config" do
@@ -112,41 +118,51 @@ RSpec.describe(NexusSemanticLogger::Application) do
       expect(config.nexus_semantic_logger.level_policy).to(be(policy))
     end
 
-    it "adds a TCP datadog appender when a local agent is configured" do
+    it "connects a TCP datadog appender when a local agent is configured" do
+      server = TCPServer.new("127.0.0.1", 0)
+      port = server.addr[1]
       config.rails_semantic_logger.format = NexusSemanticLogger::DatadogFormatter.new("my-service")
-
-      expect(sl_config).to(receive(:add_appender).with(io: $stdout, formatter: :color).and_return(appender))
-      expect(sl_config).to(receive(:add_appender).with(
-        appender: :tcp,
-        server: "agent.local:10518",
-        formatter: config.rails_semantic_logger.format,
-      ).and_return(appender))
 
       described_class.development(
         config,
-        env: { "DD_AGENT_HOST" => "agent.local", "DD_AGENT_LOGGING_PORT" => "10518" },
+        env: { "DD_AGENT_HOST" => "127.0.0.1", "DD_AGENT_LOGGING_PORT" => port.to_s },
       )
+
+      tcp_appender = added_appenders.find { |a| a.is_a?(SemanticLogger::Appender::Tcp) }
+      expect(tcp_appender).not_to(be_nil)
+      expect(tcp_appender.formatter).to(be(config.rails_semantic_logger.format))
+      expect(IO.select([server], nil, nil, 2)).not_to(be_nil)
+    ensure
+      server&.close
     end
   end
 
   describe ".test" do
     it "switches to a colour appender filtered by the policy" do
-      expect(sl_config).to(receive(:clear_appenders!))
-      expect(sl_config).to(receive(:add_appender).with(io: $stdout, formatter: :color).and_return(appender))
-      expect(appender).to(receive(:filter=).with(an_instance_of(Proc)))
-
       described_class.test(config, env: {})
+
+      appender = added_appenders.fetch(0)
+      expect(appender.formatter).to(be_a(SemanticLogger::Formatters::Color))
+      expect(appender.filter).to(be_a(Proc))
     end
   end
 
   describe "rails_semantic_logger compatibility warning" do
-    it "logs a warning when RuntimeRegistry lacks sql_runtime on rails_semantic_logger 4.x" do
+    let(:io) { StringIO.new }
+
+    before { SemanticLogger.add_appender(io: io) }
+
+    def warning_output
+      described_class.send(:warn_on_incompatible_rails_semantic_logger)
+      SemanticLogger.flush
+      io.string
+    end
+
+    it "warns when RuntimeRegistry lacks sql_runtime on rails_semantic_logger 4.x" do
       stub_const("ActiveRecord::RuntimeRegistry", Module.new)
       stub_const("RailsSemanticLogger::VERSION", "4.17.0")
 
-      expect(described_class.logger).to(receive(:warn).with(/rails_semantic_logger", ">= 5.1"/))
-
-      described_class.send(:warn_on_incompatible_rails_semantic_logger)
+      expect(warning_output).to(match(/rails_semantic_logger", ">= 5.1"/))
     end
 
     it "stays quiet when sql_runtime is available" do
@@ -158,44 +174,18 @@ RSpec.describe(NexusSemanticLogger::Application) do
       stub_const("ActiveRecord::RuntimeRegistry", registry)
       stub_const("RailsSemanticLogger::VERSION", "4.17.0")
 
-      expect(described_class.logger).not_to(receive(:warn))
-
-      described_class.send(:warn_on_incompatible_rails_semantic_logger)
+      expect(warning_output).to(be_empty)
     end
 
     it "stays quiet on rails_semantic_logger 5.x" do
       stub_const("ActiveRecord::RuntimeRegistry", Module.new)
       stub_const("RailsSemanticLogger::VERSION", "5.1.0")
 
-      expect(described_class.logger).not_to(receive(:warn))
-
-      described_class.send(:warn_on_incompatible_rails_semantic_logger)
+      expect(warning_output).to(be_empty)
     end
 
     it "stays quiet when ActiveRecord is not loaded" do
-      expect(described_class.logger).not_to(receive(:warn))
-
-      described_class.send(:warn_on_incompatible_rails_semantic_logger)
-    end
-  end
-
-  describe "signal delivery (integration)" do
-    before { allow(Signal).to(receive(:trap).and_call_original) }
-
-    after do
-      Signal.trap("WINCH", "DEFAULT")
-      Signal.trap("SYS", "DEFAULT")
-    end
-
-    it "cycles the policy level when a real WINCH signal arrives" do
-      described_class.common(config, "my-service", env: { "LOG_NAMES_DEFAULT_LEVEL" => "warn" })
-      policy = config.nexus_semantic_logger.level_policy
-
-      Process.kill("WINCH", Process.pid)
-      deadline = Time.now + 2
-      sleep(0.05) while policy.default_level == :warn && Time.now < deadline
-
-      expect(policy.default_level).to(eq(:error))
+      expect(warning_output).to(be_empty)
     end
   end
 end

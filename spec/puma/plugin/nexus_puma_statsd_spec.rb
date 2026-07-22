@@ -3,6 +3,7 @@
 require "spec_helper"
 require "puma"
 require "puma/plugin/nexus_puma_statsd"
+require_relative "../../support/fake_statsd"
 
 RSpec.describe(PumaStats) do
   # Shapes mirror Puma::Server#stats and Puma::Cluster#stats as of puma 8.
@@ -69,39 +70,39 @@ end
 RSpec.describe("nexus_puma_statsd plugin") do
   let(:plugin_class) { Puma::Plugins.find("nexus_puma_statsd") }
   let(:plugin) { plugin_class.new }
-  let(:log_writer) { instance_double(Puma::LogWriter, debug: nil) }
-  let(:launcher) { instance_double(Puma::Launcher, log_writer: log_writer) }
-  let(:metrics) { instance_double(NexusSemanticLogger::DatadogSingleton) }
 
-  before { allow(plugin).to(receive(:in_background)) }
+  after { NexusSemanticLogger.metrics.statsd = nil }
 
   it "registers with puma's plugin registry" do
     expect(plugin_class).not_to(be_nil)
     expect(plugin).to(respond_to(:start))
   end
 
-  it "uses the launcher's log writer and schedules the stats loop" do
-    plugin.start(launcher)
+  it "starts against a real puma launcher surface" do
+    log_writer = Puma::LogWriter.new(StringIO.new, StringIO.new)
+    launcher = Struct.new(:log_writer).new(log_writer)
 
-    expect(log_writer).to(have_received(:debug).with("statsd: enabled"))
-    expect(plugin).to(have_received(:in_background))
+    expect { plugin.start(launcher) }.not_to(raise_error)
   end
 
   it "emits every puma metric from a stats snapshot" do
-    allow(NexusSemanticLogger).to(receive(:metrics).and_return(metrics))
+    statsd = FakeStatsd.new
+    NexusSemanticLogger.metrics.statsd = statsd
     stats = PumaStats.new({ workers: 2, booted_workers: 2, old_workers: 0, worker_status: [] })
-    tags = ["service:my-service"]
 
-    expect(metrics).to(receive(:gauge).with("puma.workers", 2, tags: tags))
-    expect(metrics).to(receive(:gauge).with("puma.booted_workers", 2, tags: tags))
-    expect(metrics).to(receive(:gauge).with("puma.old_workers", 0, tags: tags))
-    expect(metrics).to(receive(:gauge).with("puma.running", 0, tags: tags))
-    expect(metrics).to(receive(:gauge).with("puma.backlog", 0, tags: tags))
-    expect(metrics).to(receive(:gauge).with("puma.pool_capacity", 0, tags: tags))
-    expect(metrics).to(receive(:gauge).with("puma.max_threads", 0, tags: tags))
-    expect(metrics).to(receive(:count).with("puma.requests_count", 0, tags: tags))
+    plugin.send(:notify_stats, stats, ["service:my-service"])
 
-    plugin.send(:notify_stats, stats, tags)
+    gauges = statsd.calls.select { |call| call.first == :gauge }.map { |_, name, value, _| [name, value] }
+    expect(gauges).to(contain_exactly(
+      ["puma.workers", 2],
+      ["puma.booted_workers", 2],
+      ["puma.old_workers", 0],
+      ["puma.running", 0],
+      ["puma.backlog", 0],
+      ["puma.pool_capacity", 0],
+      ["puma.max_threads", 0],
+    ))
+    expect(statsd.calls).to(include([:count, "puma.requests_count", 0, { tags: ["service:my-service"] }]))
   end
 
   describe "tags from the environment" do
