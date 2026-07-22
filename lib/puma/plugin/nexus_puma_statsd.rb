@@ -155,20 +155,23 @@ Puma::Plugin.create do
     loop do
       @log_writer.debug('statsd: notify statsd')
       begin
-        stats = ::PumaStats.new(Puma.stats_hash)
-        NexusSemanticLogger.metrics.gauge('puma.workers', stats.workers, tags: tags)
-        NexusSemanticLogger.metrics.gauge('puma.booted_workers', stats.booted_workers, tags: tags)
-        NexusSemanticLogger.metrics.gauge('puma.old_workers', stats.old_workers, tags: tags)
-        NexusSemanticLogger.metrics.gauge('puma.running', stats.running, tags: tags)
-        NexusSemanticLogger.metrics.gauge('puma.backlog', stats.backlog, tags: tags)
-        NexusSemanticLogger.metrics.gauge('puma.pool_capacity', stats.pool_capacity, tags: tags)
-        NexusSemanticLogger.metrics.gauge('puma.max_threads', stats.max_threads, tags: tags)
-        NexusSemanticLogger.metrics.count('puma.requests_count', stats.requests_count, tags: tags)
+        notify_stats(::PumaStats.new(Puma.stats_hash), tags)
       rescue StandardError => e
         @log_writer.unknown_error(e, nil, '! statsd: notify stats failed')
       ensure
         sleep(2)
       end
     end
+  end
+
+  def notify_stats(stats, tags)
+    NexusSemanticLogger.metrics.gauge('puma.workers', stats.workers, tags: tags)
+    NexusSemanticLogger.metrics.gauge('puma.booted_workers', stats.booted_workers, tags: tags)
+    NexusSemanticLogger.metrics.gauge('puma.old_workers', stats.old_workers, tags: tags)
+    NexusSemanticLogger.metrics.gauge('puma.running', stats.running, tags: tags)
+    NexusSemanticLogger.metrics.gauge('puma.backlog', stats.backlog, tags: tags)
+    NexusSemanticLogger.metrics.gauge('puma.pool_capacity', stats.pool_capacity, tags: tags)
+    NexusSemanticLogger.metrics.gauge('puma.max_threads', stats.max_threads, tags: tags)
+    NexusSemanticLogger.metrics.count('puma.requests_count', stats.requests_count, tags: tags)
   end
 end
