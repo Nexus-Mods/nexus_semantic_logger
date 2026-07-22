@@ -29,14 +29,14 @@ module NexusSemanticLogger
 
           # Configure DogStatsD instance for sending runtime metrics.
           # By default, runtime metrics from the application are sent to the Datadog Agent with DogStatsD on port 8125.
-          datadog_singleton = DatadogSingleton.instance
           datadog_statsd_socket_path = env.fetch('DD_STATSD_SOCKET_PATH') { '' }
-          datadog_singleton.statsd = if datadog_statsd_socket_path.to_s.strip.empty?
+          statsd_client = if datadog_statsd_socket_path.to_s.strip.empty?
             Datadog::Statsd.new(env['DD_AGENT_HOST'], 8125, tags: global_tags)
           else
             Datadog::Statsd.new(socket_path: datadog_statsd_socket_path, tags: global_tags)
           end
-          c.runtime_metrics.statsd = datadog_singleton.statsd
+          NexusSemanticLogger.metrics = Metrics.new(statsd: statsd_client, sync_flush: Rails.env.development?)
+          c.runtime_metrics.statsd = statsd_client
 
           # Trace tags API is Hash<String,String>, see https://www.rubydoc.info/gems/ddtrace/Datadog/Tracing
           # Should match the global tags, but as a Hash.

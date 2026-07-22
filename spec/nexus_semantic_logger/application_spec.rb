@@ -3,7 +3,6 @@
 require "rails_helper"
 require "nexus_semantic_logger"
 require "socket"
-require_relative "../support/fake_statsd"
 
 RSpec.describe(NexusSemanticLogger::Application) do
   let(:config) do
@@ -17,7 +16,7 @@ RSpec.describe(NexusSemanticLogger::Application) do
 
   after do
     (SemanticLogger.appenders.to_a - appenders_before).each { |a| SemanticLogger.remove_appender(a) }
-    NexusSemanticLogger::DatadogSingleton.instance.statsd = nil
+    NexusSemanticLogger.metrics = nil
     Datadog.configuration.reset!
     Signal.trap("WINCH", "DEFAULT")
     Signal.trap("SYS", "DEFAULT")
@@ -67,13 +66,15 @@ RSpec.describe(NexusSemanticLogger::Application) do
     end
 
     it "sends metric tagged logs to statsd" do
-      statsd = FakeStatsd.new
+      statsd = instance_spy(Datadog::Statsd)
       NexusSemanticLogger.metrics.statsd = statsd
       described_class.common(config, "my-service", env: {})
 
       SemanticLogger["MetricsSpec"].info("something happened", metric: "spec.event")
 
-      expect(statsd.calls).to(include([:increment, "spec.event", { tags: [] }]))
+      # SemanticLogger.on_log subscribers cannot be deregistered, so earlier
+      # examples that ran common leave theirs behind and each one fires.
+      expect(statsd).to(have_received(:increment).with("spec.event", tags: []).at_least(:once))
     end
 
     it "cycles the policy level and announces it when the level signal arrives" do

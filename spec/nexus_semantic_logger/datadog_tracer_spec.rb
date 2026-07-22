@@ -5,15 +5,15 @@ require "nexus_semantic_logger"
 
 RSpec.describe(NexusSemanticLogger::DatadogTracer) do
   after do
-    NexusSemanticLogger::DatadogSingleton.instance.statsd = nil
+    NexusSemanticLogger.metrics = nil
     Datadog.configuration.reset!
   end
 
   context "without a datadog agent configured" do
-    it "does not create a statsd client" do
+    it "keeps the noop statsd client" do
       described_class.new("my-service", env: {})
 
-      expect(NexusSemanticLogger::DatadogSingleton.instance.statsd).to(be_nil)
+      expect(NexusSemanticLogger.metrics.statsd).to(be_a(NexusSemanticLogger::Metrics::NoopStatsd))
     end
 
     it "quietens the datadog logger" do
@@ -35,7 +35,7 @@ RSpec.describe(NexusSemanticLogger::DatadogTracer) do
     it "creates a UDP statsd client with correlation tags" do
       described_class.new("my-service", env: env)
 
-      statsd = NexusSemanticLogger::DatadogSingleton.instance.statsd
+      statsd = NexusSemanticLogger.metrics.statsd
       expect(statsd).to(be_a(Datadog::Statsd))
       expect(statsd.host).to(eq("agent.local"))
       expect(statsd.port).to(eq(8125))
@@ -46,6 +46,12 @@ RSpec.describe(NexusSemanticLogger::DatadogTracer) do
       described_class.new("my-service", env: env)
 
       expect(Datadog.configuration.runtime_metrics.enabled).to(be(true))
+    end
+
+    it "flushes synchronously in development" do
+      described_class.new("my-service", env: env)
+
+      expect(NexusSemanticLogger.metrics.sync_flush).to(eq(Rails.env.development?))
     end
 
     it "tags traces to match the metric tags" do
@@ -81,7 +87,7 @@ RSpec.describe(NexusSemanticLogger::DatadogTracer) do
     it "creates a UDS statsd client" do
       described_class.new("my-service", env: env)
 
-      statsd = NexusSemanticLogger::DatadogSingleton.instance.statsd
+      statsd = NexusSemanticLogger.metrics.statsd
       expect(statsd).to(be_a(Datadog::Statsd))
       expect(statsd.socket_path).to(eq("/var/run/datadog/dsd.socket"))
     end

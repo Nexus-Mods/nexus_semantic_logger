@@ -3,7 +3,6 @@
 require "spec_helper"
 require "puma"
 require "puma/plugin/nexus_puma_statsd"
-require_relative "../../support/fake_statsd"
 
 RSpec.describe(PumaStats) do
   # Shapes mirror Puma::Server#stats and Puma::Cluster#stats as of puma 8.
@@ -71,7 +70,7 @@ RSpec.describe("nexus_puma_statsd plugin") do
   let(:plugin_class) { Puma::Plugins.find("nexus_puma_statsd") }
   let(:plugin) { plugin_class.new }
 
-  after { NexusSemanticLogger.metrics.statsd = nil }
+  after { NexusSemanticLogger.metrics = nil }
 
   it "registers with puma's plugin registry" do
     expect(plugin_class).not_to(be_nil)
@@ -86,23 +85,21 @@ RSpec.describe("nexus_puma_statsd plugin") do
   end
 
   it "emits every puma metric from a stats snapshot" do
-    statsd = FakeStatsd.new
+    statsd = instance_spy(Datadog::Statsd)
     NexusSemanticLogger.metrics.statsd = statsd
     stats = PumaStats.new({ workers: 2, booted_workers: 2, old_workers: 0, worker_status: [] })
+    tags = ["service:my-service"]
 
-    plugin.send(:notify_stats, stats, ["service:my-service"])
+    plugin.send(:notify_stats, stats, tags)
 
-    gauges = statsd.calls.select { |call| call.first == :gauge }.map { |_, name, value, _| [name, value] }
-    expect(gauges).to(contain_exactly(
-      ["puma.workers", 2],
-      ["puma.booted_workers", 2],
-      ["puma.old_workers", 0],
-      ["puma.running", 0],
-      ["puma.backlog", 0],
-      ["puma.pool_capacity", 0],
-      ["puma.max_threads", 0],
-    ))
-    expect(statsd.calls).to(include([:count, "puma.requests_count", 0, { tags: ["service:my-service"] }]))
+    expect(statsd).to(have_received(:gauge).with("puma.workers", 2, tags: tags))
+    expect(statsd).to(have_received(:gauge).with("puma.booted_workers", 2, tags: tags))
+    expect(statsd).to(have_received(:gauge).with("puma.old_workers", 0, tags: tags))
+    expect(statsd).to(have_received(:gauge).with("puma.running", 0, tags: tags))
+    expect(statsd).to(have_received(:gauge).with("puma.backlog", 0, tags: tags))
+    expect(statsd).to(have_received(:gauge).with("puma.pool_capacity", 0, tags: tags))
+    expect(statsd).to(have_received(:gauge).with("puma.max_threads", 0, tags: tags))
+    expect(statsd).to(have_received(:count).with("puma.requests_count", 0, tags: tags))
   end
 
   describe "tags from the environment" do
