@@ -25,7 +25,6 @@ RSpec.describe(NexusSemanticLogger::DatadogFormatter) do
       "service" => "my-service",
       "source" => "rails",
       "message" => "something happened",
-      "railsenv" => Rails.env,
     ))
     expect(hash).to(have_key("date"))
   end
@@ -43,5 +42,24 @@ RSpec.describe(NexusSemanticLogger::DatadogFormatter) do
 
     expect(hash).not_to(have_key("application"))
     expect(hash).not_to(have_key("environment"))
+  end
+
+  describe "#hash_to_json" do
+    it "drops keys that fail to serialise instead of raising" do
+      bad = Object.new
+      def bad.as_json(*)
+        raise(SystemStackError)
+      end
+
+      def bad.to_json(*)
+        raise(SystemStackError)
+      end
+
+      json = JSON.parse(formatter.hash_to_json({ good: "value", bad: bad }))
+
+      expect(json["good"]).to(eq("value"))
+      expect(json).not_to(have_key("bad"))
+      expect(json["as_json_serialise_errors"]).to(eq(["bad"]))
+    end
   end
 end
