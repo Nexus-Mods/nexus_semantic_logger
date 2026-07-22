@@ -23,43 +23,33 @@ RSpec.describe(NexusSemanticLogger::DatadogTracer) do
   before do
     allow(Datadog).to(receive(:configure).and_yield(datadog_config))
     allow(Datadog::Statsd).to(receive(:new).and_return(statsd))
-    allow(ENV).to(receive(:[]).and_call_original)
-    allow(ENV).to(receive(:fetch).and_call_original)
   end
 
   after { NexusSemanticLogger::DatadogSingleton.instance.statsd = nil }
 
-  def stub_env(key, value)
-    allow(ENV).to(receive(:[]).with(key).and_return(value))
-    allow(ENV).to(receive(:fetch).with(key, anything).and_return(value))
-    allow(ENV).to(receive(:fetch).with(key).and_return(value))
-  end
-
   context "without a datadog agent configured" do
-    before { stub_env("DD_AGENT_HOST", nil) && stub_env("DD_TRACE_AGENT_URL", nil) }
-
     it "does not create a statsd client or enable runtime metrics" do
       expect(Datadog::Statsd).not_to(receive(:new))
       expect(runtime_metrics).not_to(receive(:enabled=))
 
-      described_class.new("my-service")
+      described_class.new("my-service", env: {})
     end
 
     it "still instruments rails and quietens the datadog logger" do
       expect(tracing).to(receive(:instrument).with(:rails, hash_including(service_name: "my-service")))
       expect(dd_logger).to(receive(:level=).with(Logger::WARN))
 
-      described_class.new("my-service")
+      described_class.new("my-service", env: {})
     end
   end
 
   context "with an agent host configured" do
-    before do
-      stub_env("DD_AGENT_HOST", "agent.local")
-      stub_env("DD_STATSD_SOCKET_PATH", "")
-      stub_env("CONTAINER_NAME", "web-1")
-      stub_env("POD_NAME", "pod-1")
-      stub_env("DD_FORCE_TRACER", nil)
+    let(:env) do
+      {
+        "DD_AGENT_HOST" => "agent.local",
+        "CONTAINER_NAME" => "web-1",
+        "POD_NAME" => "pod-1",
+      }
     end
 
     it "creates a UDP statsd client with correlation tags" do
@@ -69,14 +59,14 @@ RSpec.describe(NexusSemanticLogger::DatadogTracer) do
         tags: ["service:my-service", "container_name:web-1", "pod_name:pod-1"],
       ).and_return(statsd))
 
-      described_class.new("my-service")
+      described_class.new("my-service", env: env)
     end
 
     it "enables runtime metrics with the shared statsd client" do
       expect(runtime_metrics).to(receive(:enabled=).with(true))
       expect(runtime_metrics).to(receive(:statsd=).with(statsd))
 
-      described_class.new("my-service")
+      described_class.new("my-service", env: env)
       expect(NexusSemanticLogger::DatadogSingleton.instance.statsd).to(be(statsd))
     end
 
@@ -85,34 +75,32 @@ RSpec.describe(NexusSemanticLogger::DatadogTracer) do
         { service: "my-service", container_name: "web-1", pod_name: "pod-1" },
       ))
 
-      described_class.new("my-service")
+      described_class.new("my-service", env: env)
     end
 
     it "disables tracing and profiling outside production" do
       expect(tracing).to(receive(:enabled=).with(false))
       expect(profiling).to(receive(:enabled=).with(false))
 
-      described_class.new("my-service")
+      described_class.new("my-service", env: env)
     end
 
     it "enables tracing and profiling when DD_FORCE_TRACER is true" do
-      stub_env("DD_FORCE_TRACER", "true")
-
       expect(tracing).to(receive(:enabled=).with(true))
       expect(profiling).to(receive(:enabled=).with(true))
 
-      described_class.new("my-service")
+      described_class.new("my-service", env: env.merge("DD_FORCE_TRACER" => "true"))
     end
   end
 
   context "with a statsd socket path configured" do
-    before do
-      stub_env("DD_TRACE_AGENT_URL", "unix:///var/run/datadog/apm.socket")
-      stub_env("DD_AGENT_HOST", nil)
-      stub_env("DD_STATSD_SOCKET_PATH", "/var/run/datadog/dsd.socket")
-      stub_env("CONTAINER_NAME", "web-1")
-      stub_env("POD_NAME", "pod-1")
-      stub_env("DD_FORCE_TRACER", nil)
+    let(:env) do
+      {
+        "DD_TRACE_AGENT_URL" => "unix:///var/run/datadog/apm.socket",
+        "DD_STATSD_SOCKET_PATH" => "/var/run/datadog/dsd.socket",
+        "CONTAINER_NAME" => "web-1",
+        "POD_NAME" => "pod-1",
+      }
     end
 
     it "creates a UDS statsd client" do
@@ -121,7 +109,7 @@ RSpec.describe(NexusSemanticLogger::DatadogTracer) do
         tags: ["service:my-service", "container_name:web-1", "pod_name:pod-1"],
       ).and_return(statsd))
 
-      described_class.new("my-service")
+      described_class.new("my-service", env: env)
     end
   end
 end

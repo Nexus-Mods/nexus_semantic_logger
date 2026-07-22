@@ -5,9 +5,9 @@ module NexusSemanticLogger
   class Application
     include SemanticLogger::Loggable
 
-    def self.common(config, service)
+    def self.common(config, service, env: ENV)
       # Set a safe logging level which individual environments can make more verbose if needed.
-      config.log_level = ENV.fetch('LOG_LEVEL', 'WARN')
+      config.log_level = env.fetch('LOG_LEVEL', 'WARN')
 
       # semanticlogger ddtrace correlation.
       # From https://github.com/DataDog/dd-trace-rb/issues/1450
@@ -34,10 +34,17 @@ module NexusSemanticLogger
       config.rails_semantic_logger.format = NexusSemanticLogger::DatadogFormatter.new(service)
       config.rails_semantic_logger.add_file_appender = false
       dd_appender = config.semantic_logger.add_appender(io: $stdout, formatter: config.rails_semantic_logger.format)
-      dd_appender.filter = NexusSemanticLogger::AppenderFilter.filter_lambda
-      NexusSemanticLogger::AppenderFilter.add_signal_handler
 
-      NexusSemanticLogger::DatadogTracer.new(service)
+      # One shared filter instance for every appender, so the signal handler
+      # changes the level everywhere at once.
+      NexusSemanticLogger.appender_filter = NexusSemanticLogger::AppenderFilter.new(
+        env: env,
+        fallback_level: config.log_level,
+      )
+      dd_appender.filter = NexusSemanticLogger.appender_filter.to_proc
+      NexusSemanticLogger.appender_filter.add_signal_handler
+
+      NexusSemanticLogger::DatadogTracer.new(service, env: env)
 
       SemanticLogger.on_log(NexusSemanticLogger::LoggerMetricsSubscriber.new)
 
@@ -49,25 +56,25 @@ module NexusSemanticLogger
       end
     end
 
-    def self.development(config)
+    def self.development(config, env: ENV)
       # Enable debug globally.
-      config.log_level = ENV.fetch('LOG_LEVEL', 'DEBUG')
+      config.log_level = env.fetch('LOG_LEVEL', 'DEBUG')
 
       # Change default logging to coloured logging on stdout.
       config.semantic_logger.clear_appenders!
       color_appender = config.semantic_logger.add_appender(io: $stdout, formatter: :color)
-      color_appender.filter = NexusSemanticLogger::AppenderFilter.filter_lambda
+      color_appender.filter = NexusSemanticLogger.appender_filter.to_proc
 
-      if ENV['DD_AGENT_HOST'].present? && ENV['DD_AGENT_LOGGING_PORT'].present?
+      if env['DD_AGENT_HOST'].present? && env['DD_AGENT_LOGGING_PORT'].present?
         # Development logs can be sent to datadog via a TCP logging endpoint on a local agent.
         # Each port is assigned a particular service.
         # See https://logger.rocketjob.io/appenders.html
         dd_appender = config.semantic_logger.add_appender(
           appender: :tcp,
-          server: "#{ENV['DD_AGENT_HOST']}:#{ENV['DD_AGENT_LOGGING_PORT']}",
+          server: "#{env['DD_AGENT_HOST']}:#{env['DD_AGENT_LOGGING_PORT']}",
           formatter: config.rails_semantic_logger.format
         )
-        dd_appender.filter = NexusSemanticLogger::AppenderFilter.filter_lambda
+        dd_appender.filter = NexusSemanticLogger.appender_filter.to_proc
       end
 
       logger.info('SemanticLogger initialised in development.', level: config.log_level)
@@ -80,7 +87,7 @@ module NexusSemanticLogger
       # Use human readable coloured output for logs when running tests.
       config.semantic_logger.clear_appenders!
       color_appender = config.semantic_logger.add_appender(io: $stdout, formatter: :color)
-      color_appender.filter = NexusSemanticLogger::AppenderFilter.filter_lambda
+      color_appender.filter = NexusSemanticLogger.appender_filter.to_proc
 
       # Ensure logging is immediately flushed.
       $stdout.sync = true

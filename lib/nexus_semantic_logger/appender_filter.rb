@@ -2,116 +2,106 @@
 require 'rails_semantic_logger'
 
 module NexusSemanticLogger
+  # Filters appender output by log level, with per logger-name overrides.
+  #
+  # Configuration is read once at construction from the supplied env hash
+  # (ENV by default), so instances hold plain state and never touch ENV at
+  # log time:
+  #   LOG_NAMES_DEFAULT_LEVEL  level applied to loggers without an override.
+  #   LOG_NAMES_TRACE ... LOG_NAMES_FATAL  comma separated logger names that
+  #     log at that level regardless of the default.
+  #
+  # One shared instance lives at NexusSemanticLogger.appender_filter so that
+  # the signal handler cycles the level for every appender using the filter.
   class AppenderFilter
-    def self.filter_lambda
-      -> (log) {
-        # log API see https://logger.rocketjob.io/log_struct.html
-        # and lib/semantic_logger/levels.rb
-        # level: :trace=>0, :debug=>1, :info=>2, :warn=>3, :error=>4, :fatal=>5
-        current_log_level = SemanticLogger::Levels.index(env_names_default_level)
+    LEVEL_NAME_VARS = {
+      trace: 'LOG_NAMES_TRACE',
+      debug: 'LOG_NAMES_DEBUG',
+      info: 'LOG_NAMES_INFO',
+      warn: 'LOG_NAMES_WARN',
+      error: 'LOG_NAMES_ERROR',
+      fatal: 'LOG_NAMES_FATAL',
+    }.freeze
 
-        # Names allow overriding the level that will be appended,
-        # else the global level is used to determine appending.
-        append = false
-        if log.name.in?(env_names_trace)
-          append = true
-        elsif log.name.in?(env_names_debug)
-          append = log.level_index >= 1
-        elsif log.name.in?(env_names_info)
-          append = log.level_index >= 2
-        elsif log.name.in?(env_names_warn)
-          append = log.level_index >= 3
-        elsif log.name.in?(env_names_error)
-          append = log.level_index >= 4
-        elsif log.name.in?(env_names_fatal)
-          append = log.level_index >= 5
-        else
-          append = log.level_index >= current_log_level
-        end
-        append
-      }
+    attr_reader :default_level, :level
+
+    # @param [Hash] env Configuration source, ENV by default.
+    # @param [String, Symbol, nil] fallback_level Used when the env vars are absent,
+    #   typically the Rails config.log_level.
+    def initialize(env: ENV, fallback_level: nil)
+      fallback = (fallback_level || :warn).to_s.downcase
+      @level = (env['LOG_LEVEL'] || fallback).to_s.downcase
+      @default_level = (env['LOG_NAMES_DEFAULT_LEVEL'] || fallback).to_s.downcase
+      @name_overrides = LEVEL_NAME_VARS.transform_values do |var|
+        (env[var] || '').split(',').to_set
+      end
     end
 
-    def self.env_level
-      @@level ||= ENV.fetch('LOG_LEVEL', Rails.application.config.log_level).downcase
+    # log API see https://logger.rocketjob.io/log_struct.html
+    def call(log)
+      override = @name_overrides.find { |_level, names| names.include?(log.name) }&.first
+      threshold = override || default_level
+      log.level_index >= SemanticLogger::Levels.index(threshold)
     end
 
-    def self.env_names_default_level
-      @@names_default_level ||= ENV.fetch('LOG_NAMES_DEFAULT_LEVEL', Rails.application.config.log_level).downcase
+    # SemanticLogger 4.x only accepts a Proc or Regexp as an appender filter.
+    def to_proc
+      ->(log) { call(log) }
     end
 
-    def self.env_names_trace
-      @@names_trace ||= fetch_env_names('LOG_NAMES_TRACE')
-    end
-
-    def self.env_names_debug
-      @@names_debug ||= fetch_env_names('LOG_NAMES_DEBUG')
-    end
-
-    def self.env_names_info
-      @@names_info ||= fetch_env_names('LOG_NAMES_INFO')
-    end
-
-    def self.env_names_warn
-      @@names_warn ||= fetch_env_names('LOG_NAMES_WARN')
-    end
-
-    def self.env_names_error
-      @@names_error ||= fetch_env_names('LOG_NAMES_ERROR')
-    end
-
-    def self.env_names_fatal
-      @@names_fatal ||= fetch_env_names('LOG_NAMES_FATAL')
-    end
-
-    def self.flush
-      @@level = nil
-      @@names_default_level = nil
-      @@names_trace = nil
-      @@names_debug = nil
-      @@names_info = nil
-      @@names_warn = nil
-      @@names_error = nil
-      @@names_fatal = nil
-    end
-
-    def self.fetch_env_names(var)
-      ENV.fetch(var, '').split(',').to_set
-    end
-
-    # Change LOG_LEVEL and LOG_NAMES_DEFAULT_LEVEL on a running process by sending signals.
+    # Change the default level on a running process by sending signals.
     # Each signal rotates through the levels, wrapping around.
-    # Based on SemanticLogger.add_signal_handler.
     # Note that USR1/USR2 are already used by puma. WINCH/SYS should be unused these days.
-    def self.add_signal_handler(log_names_level_signal = "WINCH", info_signal = "SYS")
-      if log_names_level_signal
-        Signal.trap(log_names_level_signal) do
-          current_level = env_names_default_level
-          next_level = get_next_log_level(current_level)
-          @@names_default_level = next_level
-          puts "#{log_names_level_signal} signal changed LOG_NAMES_DEFAULT_LEVEL from #{current_level} to #{next_level}"
+    # The handlers only touch plain instance state, keeping them trap safe.
+    def add_signal_handler(level_signal = 'WINCH', info_signal = 'SYS')
+      if level_signal
+        Signal.trap(level_signal) do
+          previous_level = default_level
+          cycle_default_level!
+          puts "#{level_signal} signal changed LOG_NAMES_DEFAULT_LEVEL from #{previous_level} to #{default_level}"
         rescue => err
-          puts "Error handling signal #{log_names_level_signal}: #{err}"
+          puts "Error handling signal #{level_signal}: #{err}"
           puts err.backtrace
         end
       end
 
-      if info_signal
-        Signal.trap(info_signal) do
-          current_level = env_names_default_level
-          puts "#{info_signal} signal reports LOG_LEVEL=#{env_level} LOG_NAMES_DEFAULT_LEVEL=#{current_level}"
-        rescue => err
-          puts "Error handling signal #{info_signal}: #{err}"
-          puts err.backtrace
-        end
+      return unless info_signal
+
+      Signal.trap(info_signal) do
+        puts "#{info_signal} signal reports LOG_LEVEL=#{level} LOG_NAMES_DEFAULT_LEVEL=#{default_level}"
+      rescue => err
+        puts "Error handling signal #{info_signal}: #{err}"
+        puts err.backtrace
       end
     end
 
-    def self.get_next_log_level(current_log_level)
-      current_log_level_index = SemanticLogger::Levels.index(current_log_level)
-      next_log_level_index = current_log_level_index + 1
-      next_log_level_index = 0 if next_log_level_index >= SemanticLogger::Levels.all_levels.size
-      SemanticLogger::Levels.level(next_log_level_index)
+    # Step the default level forward, wrapping from fatal back to trace.
+    def cycle_default_level!
+      @default_level = self.class.next_level(default_level)
+    end
+
+    def self.next_level(current_level)
+      next_index = SemanticLogger::Levels.index(current_level) + 1
+      next_index = 0 if next_index >= SemanticLogger::Levels.all_levels.size
+      SemanticLogger::Levels.level(next_index)
+    end
+
+    # Backwards compatible class level API, delegating to the shared instance.
+    class << self
+      alias_method :get_next_log_level, :next_level
+
+      def filter_lambda
+        NexusSemanticLogger.appender_filter.to_proc
+      end
+
+      def add_signal_handler(level_signal = 'WINCH', info_signal = 'SYS')
+        NexusSemanticLogger.appender_filter.add_signal_handler(level_signal, info_signal)
+      end
+
+      # Discard the shared instance so the next use re-reads configuration.
+      def flush
+        NexusSemanticLogger.appender_filter = nil
+      end
     end
   end
 end
