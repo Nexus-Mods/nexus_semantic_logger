@@ -29,6 +29,12 @@ RSpec.describe(NexusSemanticLogger::AppenderFilter) do
       expect(filter.call(build_log("Anything", :error))).to(be(true))
     end
 
+    it "normalizes levels from strings, symbols and mixed case" do
+      expect(described_class.new(env: {}, fallback_level: "WARN").default_level).to(eq(:warn))
+      expect(described_class.new(env: {}, fallback_level: :warn).default_level).to(eq(:warn))
+      expect(described_class.new(env: { "LOG_NAMES_DEFAULT_LEVEL" => "Error" }).default_level).to(eq(:error))
+    end
+
     it "lets named loggers log at their overridden level below the default" do
       filter = described_class.new(env: {
         "LOG_NAMES_DEFAULT_LEVEL" => "warn",
@@ -90,7 +96,7 @@ RSpec.describe(NexusSemanticLogger::AppenderFilter) do
 
       Process.kill("WINCH", Process.pid)
       deadline = Time.now + 2
-      sleep(0.05) while filter.default_level == "warn" && Time.now < deadline
+      sleep(0.05) while filter.default_level == :warn && Time.now < deadline
 
       expect(filter.default_level).to(eq(:error))
     end
@@ -114,7 +120,7 @@ RSpec.describe(NexusSemanticLogger::AppenderFilter) do
 
       described_class.flush
 
-      expect(NexusSemanticLogger.appender_filter.default_level).not_to(eq("error"))
+      expect(NexusSemanticLogger.appender_filter.default_level).not_to(eq(:error))
     end
   end
 end

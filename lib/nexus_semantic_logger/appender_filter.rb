@@ -28,12 +28,13 @@ module NexusSemanticLogger
     # @param [Hash] env Configuration source, ENV by default.
     # @param [String, Symbol, nil] fallback_level Used when the env vars are absent,
     #   typically the Rails config.log_level.
+    # Levels are normalized to lowercase Symbols regardless of input type.
     def initialize(env: ENV, fallback_level: nil)
-      fallback = (fallback_level || :warn).to_s.downcase
-      @level = (env['LOG_LEVEL'] || fallback).to_s.downcase
-      @default_level = (env['LOG_NAMES_DEFAULT_LEVEL'] || fallback).to_s.downcase
+      fallback = normalize_level(fallback_level || :warn)
+      @level = normalize_level(env.fetch('LOG_LEVEL', fallback))
+      @default_level = normalize_level(env.fetch('LOG_NAMES_DEFAULT_LEVEL', fallback))
       @name_overrides = LEVEL_NAME_VARS.transform_values do |var|
-        (env[var] || '').split(',').to_set
+        env.fetch(var, '').split(',').to_set
       end
     end
 
@@ -84,6 +85,12 @@ module NexusSemanticLogger
       next_index = SemanticLogger::Levels.index(current_level) + 1
       next_index = 0 if next_index >= SemanticLogger::Levels.all_levels.size
       SemanticLogger::Levels.level(next_index)
+    end
+
+    private
+
+    def normalize_level(level)
+      level.to_s.downcase.to_sym
     end
 
     # Backwards compatible class level API, delegating to the shared instance.

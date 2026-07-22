@@ -62,7 +62,7 @@ RSpec.describe(NexusSemanticLogger::Application) do
     it "builds the shared filter from the supplied env and log level" do
       described_class.common(config, "my-service", env: { "LOG_NAMES_DEFAULT_LEVEL" => "error" })
 
-      expect(NexusSemanticLogger.appender_filter.default_level).to(eq("error"))
+      expect(NexusSemanticLogger.appender_filter.default_level).to(eq(:error))
     end
 
     it "enables synchronous logging before adding appenders" do
