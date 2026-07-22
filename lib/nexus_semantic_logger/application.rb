@@ -118,7 +118,8 @@ module NexusSemanticLogger
         Signal.trap(level_signal) do
           previous_level = policy.default_level
           policy.cycle_default_level!
-          puts "#{level_signal} signal changed LOG_NAMES_DEFAULT_LEVEL from #{previous_level} to #{policy.default_level}"
+          puts "#{level_signal} signal changed LOG_NAMES_DEFAULT_LEVEL " \
+            "from #{previous_level} to #{policy.default_level}"
         rescue => err
           puts "Error handling signal #{level_signal}: #{err}"
           puts err.backtrace
