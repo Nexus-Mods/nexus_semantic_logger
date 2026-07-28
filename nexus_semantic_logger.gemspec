@@ -16,7 +16,7 @@ Gem::Specification.new do |spec|
   spec.add_dependency('amazing_print', '~> 1.4.0')
   spec.add_dependency('datadog', '~> 2.24') # For datadog tracing/profiling.
   spec.add_dependency('dogstatsd-ruby', '~> 5.7') # For custom application metrics.
-  spec.add_dependency('google-protobuf', '~> 3.25.5')
+  spec.add_dependency('google-protobuf', '>= 3.25.5') # 3.25.x doesn't support ruby >= 3.4; allow 4.x too.
   spec.add_dependency('net_tcp_client', '~> 2.2.0') # For TCP logging.
   spec.add_dependency('rails_semantic_logger', '~> 4.17.0')
   spec.add_dependency('semantic_logger', '~> 4.16.1')
