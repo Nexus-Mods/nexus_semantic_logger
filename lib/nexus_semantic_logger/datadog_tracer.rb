@@ -4,15 +4,15 @@ require 'datadog'
 
 module NexusSemanticLogger
   class DatadogTracer
-    def initialize(service)
+    def initialize(service, env: ENV)
       Datadog.configure do |c|
         # When using a socket, DD_AGENT_HOST will not be set, and DD_TRACE_AGENT_URL will be set instead.
-        if ENV['DD_AGENT_HOST'].present? || ENV['DD_TRACE_AGENT_URL'].present?
+        if env['DD_AGENT_HOST'].present? || env['DD_TRACE_AGENT_URL'].present?
 
           # Container and pod names should be set as env vars via the helm chart. Tagging metrics from the app
           # with these values helps correlation with metrics from the kubernetes cluster.
-          container_name = ENV.fetch('CONTAINER_NAME') { '' }
-          pod_name = ENV.fetch('POD_NAME') { '' }
+          container_name = env.fetch('CONTAINER_NAME') { '' }
+          pod_name = env.fetch('POD_NAME') { '' }
 
           # Configure tags to be sent on all metrics.
           # Note that 'env' is NOT sent- that is set as the default on the agent e.g. staging, canary, production.
@@ -29,14 +29,14 @@ module NexusSemanticLogger
 
           # Configure DogStatsD instance for sending runtime metrics.
           # By default, runtime metrics from the application are sent to the Datadog Agent with DogStatsD on port 8125.
-          datadog_singleton = DatadogSingleton.instance
-          datadog_statsd_socket_path = ENV.fetch('DD_STATSD_SOCKET_PATH') { '' }
-          datadog_singleton.statsd = if datadog_statsd_socket_path.to_s.strip.empty?
-            Datadog::Statsd.new(ENV['DD_AGENT_HOST'], 8125, tags: global_tags)
+          datadog_statsd_socket_path = env.fetch('DD_STATSD_SOCKET_PATH') { '' }
+          statsd_client = if datadog_statsd_socket_path.to_s.strip.empty?
+            Datadog::Statsd.new(env['DD_AGENT_HOST'], 8125, tags: global_tags)
           else
             Datadog::Statsd.new(socket_path: datadog_statsd_socket_path, tags: global_tags)
           end
-          c.runtime_metrics.statsd = datadog_singleton.statsd
+          NexusSemanticLogger.metrics = Metrics.new(statsd: statsd_client, sync_flush: Rails.env.development?)
+          c.runtime_metrics.statsd = statsd_client
 
           # Trace tags API is Hash<String,String>, see https://www.rubydoc.info/gems/ddtrace/Datadog/Tracing
           # Should match the global tags, but as a Hash.
@@ -47,7 +47,7 @@ module NexusSemanticLogger
           }
 
           # Tracer requires configuration to a datadog agent via DD_AGENT_HOST.
-          dd_force_tracer_val = ENV.fetch('DD_FORCE_TRACER', false)
+          dd_force_tracer_val = env.fetch('DD_FORCE_TRACER', false)
           dd_force_tracer = dd_force_tracer_val.present? && dd_force_tracer_val.to_s == 'true'
           dd_tracer_enabled = Rails.env.production? || dd_force_tracer
           c.tracing.enabled = dd_tracer_enabled

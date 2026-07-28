@@ -1,77 +1,13 @@
 # frozen_string_literal: true
-require 'singleton'
+require 'nexus_semantic_logger/metrics'
 
 module NexusSemanticLogger
-  # Application wide location to get datadog objects.
-  # dogstatsd-ruby maintains its own queue and thread for flushing, so the client code should never create its
-  # own statsd instance.
-  class DatadogSingleton
-    include Singleton
-    attr_accessor :statsd
-
-    def flush
-      statsd&.flush(sync: Rails.env.development?) # Force flush sync in development, speed up checks.
-    end
-
-    # Delegate to statsd (if available).
-    # @param [String] metric Metric name.
-    # @param [Array<String>] tags Additional tags.
-    def increment(metric, tags: [])
-      statsd&.increment(metric, tags: combine_tags(tags))
-      flush
-    end
-
-    # Delegate to statsd (if available).
-    # @param [String] metric Metric name.
-    # @param [Array<String>] tags Additional tags.
-    def decrement(metric, tags: [])
-      statsd&.decrement(metric, tags: combine_tags(tags))
-      flush
-    end
-
-    # Delegate to statsd (if available).
-    # @param [String] metric Metric name.
-    # @param [Integer] ms Timing in milliseconds.
-    # @param [Array<String>] tags Additional tags.
-    def timing(metric, ms, tags: [])
-      statsd&.timing(metric, ms, tags: combine_tags(tags))
-      flush
-    end
-
-    # Delegate to statsd (if available).
-    # @param [String] metric Metric name.
-    # @param [Numeric] value Distribution value.
-    # @param [Array<String>] tags Additional tags.
-    def distribution(metric, value, tags: [])
-      statsd&.distribution(metric, value, tags: combine_tags(tags))
-      flush
-    end
-
-    # Delegate to statsd (if available).
-    # @param [String] metric Metric name.
-    # @param [Numeric] value Gauge value.
-    # @param [Array<String>] tags Additional tags.
-    def gauge(metric, value, tags: [])
-      statsd&.gauge(metric, value, tags: combine_tags(tags))
-      flush
-    end
-
-    # Delegate to statsd (if available).
-    # @param [String] metric Metric name.
-    # @param [Numeric] value Count value.
-    # @param [Array<String>] tags Additional tags.
-    def count(metric, value, tags: [])
-      statsd&.count(metric, value, tags: combine_tags(tags))
-      flush
-    end
-
-    private
-
-    # Safely combine the supplied tags.
-    def combine_tags(tags)
-      final_tags = []
-      final_tags += tags unless tags.nil?
-      final_tags
+  # Deprecated, kept for services that reference the old name directly,
+  # including verified doubles of its instance methods in their specs.
+  # The shared metrics object lives at NexusSemanticLogger.metrics.
+  class DatadogSingleton < Metrics
+    def self.instance
+      NexusSemanticLogger.metrics
     end
   end
 end
