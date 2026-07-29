@@ -46,6 +46,7 @@ module NexusSemanticLogger
       config.after_initialize do
         require("nexus_semantic_logger/extensions/action_dispatch/debug_exceptions") if defined?(
           ::ActionDispatch::DebugExceptions)
+        warn_on_incompatible_rails_semantic_logger
       end
     end
 
@@ -85,5 +86,29 @@ module NexusSemanticLogger
       # Ensure logging is immediately flushed.
       $stdout.sync = true
     end
+
+    # Rails 8.1 needs rails_semantic_logger 5.x and no gemspec can express that, so detect the
+    # broken pairing at boot.
+    def self.warn_on_incompatible_rails_semantic_logger
+      return unless incompatible_rails_semantic_logger?
+
+      logger.warn(
+        'rails_semantic_logger 4.x cannot log ActiveRecord events on this Rails version, every ' \
+        'sql.active_record event will log a NoMethodError instead of the query. Add ' \
+        '`gem "rails_semantic_logger", ">= 5.1"` to your Gemfile so bundler refuses this ' \
+        'pairing, then `bundle update rails_semantic_logger semantic_logger`.'
+      )
+    end
+
+    # Rails 8.1 moved ActiveRecord::RuntimeRegistry.sql_runtime onto a stats object, which
+    # rails_semantic_logger only handles from 5.0. Apps carrying their own shim restore
+    # sql_runtime and so read as compatible here.
+    def self.incompatible_rails_semantic_logger?
+      defined?(::ActiveRecord::RuntimeRegistry) &&
+        !::ActiveRecord::RuntimeRegistry.respond_to?(:sql_runtime) &&
+        Gem::Version.new(RailsSemanticLogger::VERSION) < Gem::Version.new('5.0')
+    end
+
+    private_class_method :warn_on_incompatible_rails_semantic_logger, :incompatible_rails_semantic_logger?
   end
 end
