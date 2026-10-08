@@ -2,6 +2,7 @@
 
 require "spec_helper"
 require "nexus_semantic_logger"
+require "tempfile"
 
 RSpec.describe(NexusSemanticLogger::TracedShell) do
   subject(:shell) { described_class.new }
@@ -76,6 +77,69 @@ RSpec.describe(NexusSemanticLogger::TracedShell) do
 
       expect(metrics).to(have_received(:distribution)
         .with("nexus.shell.peak_rss_mb", be >= 50, tags: ["command:ruby", "outcome:success"]))
+    end
+
+    # Temporal cancels an activity by raising into its thread. Before this the raise unwound into
+    # popen3's ensure, which waited for the child: a 7z nobody wanted any more ran on for hours,
+    # holding memory and an activity slot (OBX-706).
+    context "when the caller's thread is interrupted" do
+      let(:cancelled) { Class.new(StandardError) }
+      let(:pidfile) { Tempfile.new("traced-shell-grandchild") }
+
+      after { pidfile.close! }
+
+      def wait_for(timeout: 5)
+        deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + timeout
+        until (value = yield)
+          raise "timed out waiting" if Process.clock_gettime(Process::CLOCK_MONOTONIC) > deadline
+
+          sleep(0.02)
+        end
+        value
+      end
+
+      # A zombie answers kill(0) until it is reaped, which under a PID 1 with no reaper is never.
+      def gone?(pid)
+        Process.kill(0, pid)
+        File.read("/proc/#{pid}/status").match?(/^State:\s+Z/)
+      rescue Errno::ESRCH, Errno::ENOENT
+        true
+      end
+
+      # sh (the child) backgrounds sleep (a grandchild), records its pid so the spec knows the
+      # command is running, then waits on it.
+      let(:cmd) { ["sh", "-c", "sleep 30 & echo $! > #{pidfile.path}; wait"] }
+
+      # The cancellation is asserted on #value; without this Ruby also prints it to stderr.
+      def run_in_thread
+        Thread.new { shell.capture3(*cmd) }.tap { |t| t.report_on_exception = false }
+      end
+
+      def grandchild_pid
+        wait_for { File.read(pidfile.path).strip.then { |text| text.empty? ? nil : Integer(text) } }
+      end
+
+      it "kills the child and its descendants instead of waiting for them" do
+        calling_thread = run_in_thread
+        grandchild = grandchild_pid
+
+        started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+        calling_thread.raise(cancelled, "activity cancelled")
+
+        expect { calling_thread.value }.to(raise_error(cancelled))
+        expect(Process.clock_gettime(Process::CLOCK_MONOTONIC) - started).to(be < described_class::KILL_GRACE_SECONDS)
+        expect(wait_for { gone?(grandchild) }).to(be(true))
+      end
+
+      it "still records the run as an exception" do
+        calling_thread = run_in_thread
+        grandchild_pid
+        calling_thread.raise(cancelled, "activity cancelled")
+        expect { calling_thread.value }.to(raise_error(cancelled))
+
+        expect(metrics).to(have_received(:increment)
+          .with("nexus.shell.executions", tags: ["command:sh", "outcome:exception"]))
+      end
     end
 
     it "excludes a leading env hash from the logged command" do
