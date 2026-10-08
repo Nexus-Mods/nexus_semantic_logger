@@ -74,6 +74,13 @@ metrics tagged with `command:<binary>` and `outcome:<success|failure|signaled|ex
 info log line. A child killed by the kernel OOM killer shows up as `outcome:signaled` with
 `termsig: 9` and its last-observed peak RSS.
 
+The child runs in its own process group, and if the calling thread is interrupted while it runs
+(an exception raised into it — which is how a Temporal activity receives cancellation — an
+`Interrupt`, a `Timeout::Error`) the whole group is sent `SIGTERM`, then `SIGKILL` five seconds
+later if still alive, before the exception propagates. `Open3.capture3` would instead wait for the
+child to finish on its own. Pass `pgroup:` yourself to opt out of the group; the child itself is
+still killed.
+
 # Local gem development
 
 Steps to run this gem from local sources in one the nexus 'staged build' rails components:

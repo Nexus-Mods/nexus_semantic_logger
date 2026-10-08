@@ -23,6 +23,8 @@ module NexusSemanticLogger
     METRIC_PREFIX = 'nexus.shell'
     RSS_POLL_INTERVAL_SECONDS = 0.05
     COMMAND_LOG_MAX_CHARS = 500
+    # How long a child gets to act on SIGTERM before it is SIGKILLed.
+    KILL_GRACE_SECONDS = 5
 
     # Drop-in replacement for Open3.capture3.
     # A leading env Hash and trailing spawn options are supported as with Open3; the env Hash is
@@ -58,25 +60,60 @@ module NexusSemanticLogger
 
     # Open3.capture3 semantics, reimplemented over popen3 so the child pid is available to the
     # RSS poller while it runs.
+    #
+    # The child is killed if the caller is interrupted. An exception raised into this thread
+    # (Temporal cancelling an activity does exactly that, via Thread#raise) otherwise unwinds into
+    # popen3's ensure, which closes the pipes and then WAITS for the child to exit — so a 7z that had
+    # already been given up on carried on for hours, holding gigabytes and an activity slot for a
+    # result nobody would read. The child runs in its own process group so its own children go with
+    # it; a caller may still pass `pgroup:` to override that.
     def run_capture3(cmd, stdin_data, binmode, opts)
-      Open3.popen3(*cmd, **opts) do |stdin, stdout, stderr, wait_thr|
+      Open3.popen3(*cmd, **{ pgroup: true }.merge(opts)) do |stdin, stdout, stderr, wait_thr|
         if binmode
           stdin.binmode
           stdout.binmode
           stderr.binmode
         end
         poller = start_rss_poller(wait_thr)
-        out_reader = Thread.new { stdout.read }
-        err_reader = Thread.new { stderr.read }
+        # #value re-raises a reader's failure in this thread, so the thread's own report adds
+        # nothing — and when the child is killed below, popen3 closes the pipes under them, which
+        # would otherwise print a spurious "stream closed in another thread" for each.
+        out_reader = Thread.new { stdout.read }.tap { |t| t.report_on_exception = false }
+        err_reader = Thread.new { stderr.read }.tap { |t| t.report_on_exception = false }
         begin
-          stdin.write(stdin_data) if stdin_data && !stdin_data.empty?
-        rescue Errno::EPIPE
-          # Child exited without consuming stdin; Open3.capture3 ignores this too.
+          begin
+            stdin.write(stdin_data) if stdin_data && !stdin_data.empty?
+          rescue Errno::EPIPE
+            # Child exited without consuming stdin; Open3.capture3 ignores this too.
+          end
+          stdin.close
+          status = wait_thr.value
+          [out_reader.value, err_reader.value, status, poller&.value]
+        rescue Exception # rubocop:disable Lint/RescueException
+          # Deliberately everything: Thread#raise delivers whatever the canceller chose, and an
+          # Interrupt or Timeout::Error must not leave the child running either.
+          terminate(wait_thr)
+          raise
         end
-        stdin.close
-        status = wait_thr.value
-        [out_reader.value, err_reader.value, status, poller&.value]
       end
+    end
+
+    # TERM the child's process group, then KILL whatever ignored it. The group id is the child's
+    # pid because it was spawned as a group leader; if a caller overrode `pgroup:` this still
+    # reaches the child itself, just not its descendants.
+    def terminate(wait_thr)
+      pid = wait_thr.pid
+      target = process_group_leader?(pid) ? -pid : pid
+      Process.kill('TERM', target)
+      Process.kill('KILL', target) unless wait_thr.join(KILL_GRACE_SECONDS)
+    rescue Errno::ESRCH, Errno::EPERM
+      # Already gone, or not ours to signal; either way there is nothing left to stop.
+    end
+
+    def process_group_leader?(pid)
+      Process.getpgid(pid) == pid
+    rescue Errno::ESRCH
+      false
     end
 
     def start_rss_poller(wait_thr)
